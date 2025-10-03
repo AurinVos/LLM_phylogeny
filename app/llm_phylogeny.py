@@ -9,20 +9,16 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import json
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
 import networkx as nx
-from bokeh.core.properties import Any as BkAny
-from bokeh.core.properties import Dict as BkDict
-from bokeh.core.properties import Float as BkFloat
-from bokeh.core.properties import List as BkList
-from bokeh.core.properties import String as BkString
 from bokeh.io import output_file, save, show
-from bokeh.models import LayoutDOM
+from bokeh.models import Div
 from bokeh.palettes import Category20
-from bokeh.util.compiler import JavaScript
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA_PATH = REPO_ROOT / "data" / "llm_models.csv"
@@ -39,709 +35,6 @@ class TimelineLayout:
     node_positions_dt: Dict[str, tuple[dt.datetime, float]]
     x_range_ms: tuple[float, float]
     x_range_dt: tuple[dt.datetime, dt.datetime]
-
-
-class ThreeDScatter(LayoutDOM):
-    """Custom Bokeh model that renders an interactive 3D scatter plot."""
-
-    __javascript__ = [
-        "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js",
-        "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.min.js",
-    ]
-
-    __implementation__ = JavaScript(
-        """
-import {LayoutDOM, LayoutDOMView} from "models/layouts/layout_dom"
-import * as p from "core/properties"
-
-declare const THREE: any
-
-type AxisVectors = {
-    origin: any
-    x: any
-    y: any
-    z: any
-}
-
-export class ThreeDScatterView extends LayoutDOMView {
-    declare model: ThreeDScatter
-
-    private _container: HTMLElement | null = null
-    private _renderer: any = null
-    private _scene: any = null
-    private _camera: any = null
-    private _controls: any = null
-    private _points: any = null
-    private _edges: any = null
-    private _axisGroup: any = null
-    private _axisVectors: AxisVectors | null = null
-    private _raycaster: any
-    private _mouse: any
-    private _overlay: HTMLElement | null = null
-    private _tooltip: HTMLElement | null = null
-    private _axisLabels: Record<string, HTMLElement> = {}
-    private _legendEl: HTMLElement | null = null
-    private _categoryEls: Record<string, HTMLElement> = {}
-    private _instructionsEl: HTMLElement | null = null
-    private _animationHandle: number | null = null
-
-    private readonly _handleResize = () => this._resize()
-    private readonly _handlePointerMove = (event: MouseEvent) => this._onPointerMove(event)
-    private readonly _handlePointerLeave = () => this._hideTooltip()
-
-    constructor(options: any) {
-        super(options)
-        this._raycaster = new THREE.Raycaster()
-        this._mouse = new THREE.Vector2()
-    }
-
-    override connect_signals(): void {
-        super.connect_signals()
-        const {
-            data,
-            edges,
-            axis_labels,
-            axis_limits,
-            categories,
-            legend_items,
-            point_size,
-            background_color,
-            instructions,
-        } = this.model.properties
-        this.on_change(data, () => this._updatePoints())
-        this.on_change(edges, () => this._updateEdges())
-        this.on_change(axis_labels, () => this._updateAxisLabels())
-        this.on_change(axis_limits, () => this._rebuildAxes())
-        this.on_change(categories, () => this._buildCategories())
-        this.on_change(legend_items, () => this._buildLegend())
-        this.on_change(point_size, () => this._updatePointSize())
-        this.on_change(background_color, () => this._updateBackground())
-        this.on_change(instructions, () => this._updateInstructions())
-    }
-
-    override remove(): void {
-        super.remove()
-        if (this._animationHandle != null) {
-            cancelAnimationFrame(this._animationHandle)
-            this._animationHandle = null
-        }
-        if (this._controls != null) {
-            this._controls.dispose()
-            this._controls = null
-        }
-        if (this._renderer != null) {
-            this._renderer.dispose()
-            this._renderer = null
-        }
-        window.removeEventListener("resize", this._handleResize)
-    }
-
-    override render(): void {
-        super.render()
-        if (this._container == null) {
-            this._container = document.createElement("div")
-            this._container.style.position = "relative"
-            this._container.style.width = "100%"
-            this._container.style.height = "100%"
-            this.shadow_el.appendChild(this._container)
-
-            this._initThree()
-            this._buildOverlay()
-            this._buildLegend()
-            this._buildCategories()
-            this._updateInstructions()
-
-            const canvas = this._renderer.domElement
-            canvas.style.width = "100%"
-            canvas.style.height = "100%"
-            canvas.addEventListener("mousemove", this._handlePointerMove)
-            canvas.addEventListener("mouseleave", this._handlePointerLeave)
-            window.addEventListener("resize", this._handleResize)
-        }
-
-        this._resize()
-        this._updateBackground()
-        this._rebuildAxes()
-        this._updatePoints()
-        this._updateEdges()
-        this._startAnimationLoop()
-    }
-
-    private _initThree(): void {
-        if (this._container == null)
-            return
-        this._renderer = new THREE.WebGLRenderer({antialias: true})
-        this._renderer.setPixelRatio(window.devicePixelRatio || 1)
-        this._container.appendChild(this._renderer.domElement)
-
-        this._scene = new THREE.Scene()
-
-        this._camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000)
-        this._camera.position.set(0, 0, 100)
-
-        this._controls = new THREE.OrbitControls(this._camera, this._renderer.domElement)
-        this._controls.enableDamping = true
-        this._controls.dampingFactor = 0.08
-
-        const ambient = new THREE.AmbientLight(0xffffff, 0.65)
-        this._scene.add(ambient)
-        const directional = new THREE.DirectionalLight(0xffffff, 0.65)
-        directional.position.set(1.2, 1.6, 2.4)
-        this._scene.add(directional)
-    }
-
-    private _buildOverlay(): void {
-        if (this._container == null)
-            return
-
-        const style = document.createElement("style")
-        style.textContent = `
-            :host {
-                font-family: "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
-            }
-            .three-overlay {
-                position: absolute;
-                inset: 0;
-                pointer-events: none;
-                color: #f5f5f5;
-                font-size: 12px;
-            }
-            .three-tooltip {
-                position: absolute;
-                pointer-events: none;
-                background: rgba(12, 12, 18, 0.92);
-                border-radius: 8px;
-                padding: 10px 12px;
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
-                min-width: 220px;
-                display: none;
-                line-height: 1.45;
-            }
-            .three-tooltip .tooltip-title {
-                font-weight: 600;
-                margin-bottom: 6px;
-            }
-            .three-tooltip .tooltip-row {
-                display: flex;
-                justify-content: space-between;
-                gap: 8px;
-            }
-            .three-tooltip .tooltip-row span:first-child {
-                color: #9fa8da;
-            }
-            .three-axis-label {
-                position: absolute;
-                transform: translate(-50%, -50%);
-                background: rgba(14, 15, 24, 0.78);
-                border: 1px solid rgba(255, 255, 255, 0.18);
-                border-radius: 4px;
-                padding: 4px 8px;
-                pointer-events: none;
-                font-size: 11px;
-                letter-spacing: 0.2px;
-            }
-            .three-legend,
-            .three-category-panel,
-            .three-instructions {
-                background: rgba(10, 12, 20, 0.78);
-                border-radius: 10px;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                backdrop-filter: blur(6px);
-                padding: 12px;
-                pointer-events: auto;
-            }
-            .three-legend {
-                position: absolute;
-                top: 18px;
-                right: 18px;
-                min-width: 200px;
-            }
-            .three-legend .legend-title {
-                font-weight: 600;
-                margin-bottom: 8px;
-            }
-            .three-legend .legend-item {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-bottom: 4px;
-            }
-            .three-legend .legend-swatch {
-                width: 14px;
-                height: 14px;
-                border-radius: 50%;
-                border: 1px solid rgba(255, 255, 255, 0.65);
-            }
-            .three-category-panel {
-                position: absolute;
-                bottom: 18px;
-                max-height: 220px;
-                overflow-y: auto;
-                width: 260px;
-                line-height: 1.35;
-            }
-            .three-category-panel .panel-title {
-                font-weight: 600;
-                margin-bottom: 6px;
-            }
-            .three-category-panel .panel-row {
-                font-size: 11px;
-                margin-bottom: 4px;
-            }
-            .three-category-panel.models {
-                left: 18px;
-            }
-            .three-category-panel.innovations {
-                right: 18px;
-            }
-            .three-instructions {
-                position: absolute;
-                top: 18px;
-                left: 18px;
-                max-width: 260px;
-                line-height: 1.5;
-                font-size: 12px;
-            }
-        `
-        this.shadow_el.appendChild(style)
-
-        this._overlay = document.createElement("div")
-        this._overlay.className = "three-overlay"
-        this._container.appendChild(this._overlay)
-
-        this._tooltip = document.createElement("div")
-        this._tooltip.className = "three-tooltip"
-        this._overlay.appendChild(this._tooltip)
-
-        this._axisLabels = {
-            x: document.createElement("div"),
-            y: document.createElement("div"),
-            z: document.createElement("div"),
-        }
-        for (const key of Object.keys(this._axisLabels)) {
-            const element = this._axisLabels[key]
-            element.className = "three-axis-label"
-            this._overlay.appendChild(element)
-        }
-
-        this._instructionsEl = document.createElement("div")
-        this._instructionsEl.className = "three-instructions"
-        this._overlay.appendChild(this._instructionsEl)
-    }
-
-    private _buildLegend(): void {
-        if (this._overlay == null)
-            return
-        if (this._legendEl != null) {
-            this._legendEl.remove()
-            this._legendEl = null
-        }
-        const items = this.model.legend_items
-        if (items.length === 0)
-            return
-
-        const legend = document.createElement("div")
-        legend.className = "three-legend"
-
-        const title = document.createElement("div")
-        title.className = "legend-title"
-        title.textContent = "Model families"
-        legend.appendChild(title)
-
-        for (const item of items) {
-            const row = document.createElement("div")
-            row.className = "legend-item"
-
-            const swatch = document.createElement("span")
-            swatch.className = "legend-swatch"
-            swatch.style.background = item.color ?? "#cccccc"
-            row.appendChild(swatch)
-
-            const label = document.createElement("span")
-            label.textContent = item.label ?? ""
-            row.appendChild(label)
-
-            legend.appendChild(row)
-        }
-
-        this._overlay.appendChild(legend)
-        this._legendEl = legend
-    }
-
-    private _buildCategories(): void {
-        if (this._overlay == null)
-            return
-        for (const key of Object.keys(this._categoryEls)) {
-            const panel = this._categoryEls[key]
-            panel.remove()
-        }
-        this._categoryEls = {}
-
-        const categories = this.model.categories
-        const modelEntries = categories["models"] ?? []
-        if (modelEntries.length > 0) {
-            const panel = document.createElement("div")
-            panel.className = "three-category-panel models"
-            panel.innerHTML = '<div class="panel-title">Model indices</div>'
-            for (const entry of modelEntries) {
-                const row = document.createElement("div")
-                row.className = "panel-row"
-                row.textContent = `${entry.index}: ${entry.label}`
-                panel.appendChild(row)
-            }
-            this._overlay.appendChild(panel)
-            this._categoryEls["models"] = panel
-        }
-
-        const innovationEntries = categories["innovations"] ?? []
-        if (innovationEntries.length > 0) {
-            const panel = document.createElement("div")
-            panel.className = "three-category-panel innovations"
-            panel.innerHTML = '<div class="panel-title">Technical innovations</div>'
-            for (const entry of innovationEntries) {
-                const row = document.createElement("div")
-                row.className = "panel-row"
-                row.textContent = `${entry.index}: ${entry.label}`
-                panel.appendChild(row)
-            }
-            this._overlay.appendChild(panel)
-            this._categoryEls["innovations"] = panel
-        }
-    }
-
-    private _updateInstructions(): void {
-        if (this._instructionsEl != null) {
-            this._instructionsEl.textContent = this.model.instructions
-        }
-    }
-
-    private _rebuildAxes(): void {
-        if (this._scene == null)
-            return
-        if (this._axisGroup != null) {
-            this._scene.remove(this._axisGroup)
-            this._axisGroup = null
-        }
-
-        const limits = this.model.axis_limits
-        const xLimits = limits["x"] ?? null
-        const yLimits = limits["y"] ?? null
-        const zLimits = limits["z"] ?? null
-        if (xLimits == null || yLimits == null || zLimits == null)
-            return
-
-        const origin = new THREE.Vector3(xLimits[0], yLimits[0], zLimits[0])
-        const xEnd = new THREE.Vector3(xLimits[1], yLimits[0], zLimits[0])
-        const yEnd = new THREE.Vector3(xLimits[0], yLimits[1], zLimits[0])
-        const zEnd = new THREE.Vector3(xLimits[0], yLimits[0], zLimits[1])
-
-        const makeLine = (start: any, end: any, color: number) => {
-            const geometry = new THREE.BufferGeometry().setFromPoints([start, end])
-            const material = new THREE.LineBasicMaterial({color, linewidth: 1.5})
-            return new THREE.Line(geometry, material)
-        }
-
-        const axisGroup = new THREE.Group()
-        axisGroup.add(makeLine(origin, xEnd, 0x5dade2))
-        axisGroup.add(makeLine(origin, yEnd, 0x58d68d))
-        axisGroup.add(makeLine(origin, zEnd, 0xf4d03f))
-
-        this._scene.add(axisGroup)
-        this._axisGroup = axisGroup
-        this._axisVectors = {origin, x: xEnd, y: yEnd, z: zEnd}
-
-        this._positionCamera(xLimits, yLimits, zLimits)
-        this._updateAxisLabels()
-        this._updateOverlayPositions()
-    }
-
-    private _positionCamera(xLimits: number[], yLimits: number[], zLimits: number[]): void {
-        if (this._camera == null || this._controls == null)
-            return
-        const center = new THREE.Vector3(
-            (xLimits[0] + xLimits[1]) / 2,
-            (yLimits[0] + yLimits[1]) / 2,
-            (zLimits[0] + zLimits[1]) / 2,
-        )
-        const spanX = Math.max(1, Math.abs(xLimits[1] - xLimits[0]))
-        const spanY = Math.max(1, Math.abs(yLimits[1] - yLimits[0]))
-        const spanZ = Math.max(1, Math.abs(zLimits[1] - zLimits[0]))
-        const maxSpan = Math.max(spanX, spanY, spanZ)
-
-        this._camera.position.set(
-            center.x + maxSpan * 1.6,
-            center.y + maxSpan * 1.15,
-            center.z + maxSpan * 1.8,
-        )
-        this._controls.target.copy(center)
-        this._controls.update()
-    }
-
-    private _updateAxisLabels(): void {
-        const labels = this.model.axis_labels
-        if (this._axisLabels.x != null) {
-            this._axisLabels.x.textContent = labels.x ?? "Time"
-        }
-        if (this._axisLabels.y != null) {
-            this._axisLabels.y.textContent = labels.y ?? "Model"
-        }
-        if (this._axisLabels.z != null) {
-            this._axisLabels.z.textContent = labels.z ?? "Innovation"
-        }
-        this._updateOverlayPositions()
-    }
-
-    private _updateOverlayPositions(): void {
-        if (
-            this._renderer == null ||
-            this._camera == null ||
-            this._axisVectors == null
-        ) {
-            return
-        }
-        const width = this._renderer.domElement.clientWidth
-        const height = this._renderer.domElement.clientHeight
-        const project = (vector: any) => {
-            const projected = vector.clone().project(this._camera)
-            return {
-                x: (projected.x + 1) / 2 * width,
-                y: (-projected.y + 1) / 2 * height,
-            }
-        }
-
-        const xPos = project(this._axisVectors.x)
-        if (this._axisLabels.x != null) {
-            this._axisLabels.x.style.left = `${xPos.x}px`
-            this._axisLabels.x.style.top = `${xPos.y}px`
-        }
-        const yPos = project(this._axisVectors.y)
-        if (this._axisLabels.y != null) {
-            this._axisLabels.y.style.left = `${yPos.x}px`
-            this._axisLabels.y.style.top = `${yPos.y}px`
-        }
-        const zPos = project(this._axisVectors.z)
-        if (this._axisLabels.z != null) {
-            this._axisLabels.z.style.left = `${zPos.x}px`
-            this._axisLabels.z.style.top = `${zPos.y}px`
-        }
-    }
-
-    private _updateBackground(): void {
-        if (this._scene != null) {
-            this._scene.background = new THREE.Color(this.model.background_color)
-        }
-    }
-
-    private _updatePoints(): void {
-        if (this._scene == null)
-            return
-        if (this._points != null) {
-            this._scene.remove(this._points)
-            this._points.geometry.dispose()
-            this._points.material.dispose()
-            this._points = null
-        }
-
-        const data = this.model.data as any
-        const xs: number[] = data.x ?? []
-        const ys: number[] = data.y ?? []
-        const zs: number[] = data.z ?? []
-        if (xs.length === 0)
-            return
-
-        const colors: string[] = data.color ?? []
-
-        const positions = new Float32Array(xs.length * 3)
-        const colorValues = new Float32Array(xs.length * 3)
-        for (let i = 0; i < xs.length; i++) {
-            positions[i * 3] = xs[i]
-            positions[i * 3 + 1] = ys[i]
-            positions[i * 3 + 2] = zs[i]
-
-            const color = new THREE.Color(colors[i] ?? "#9fa8da")
-            colorValues[i * 3] = color.r
-            colorValues[i * 3 + 1] = color.g
-            colorValues[i * 3 + 2] = color.b
-        }
-
-        const geometry = new THREE.BufferGeometry()
-        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
-        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colorValues, 3))
-
-        const material = new THREE.PointsMaterial({
-            size: this.model.point_size,
-            vertexColors: true,
-            sizeAttenuation: true,
-        })
-
-        this._points = new THREE.Points(geometry, material)
-        this._scene.add(this._points)
-    }
-
-    private _updatePointSize(): void {
-        if (this._points != null) {
-            this._points.material.size = this.model.point_size
-        }
-    }
-
-    private _updateEdges(): void {
-        if (this._scene == null)
-            return
-        if (this._edges != null) {
-            this._scene.remove(this._edges)
-            this._edges.geometry.dispose()
-            this._edges.material.dispose()
-            this._edges = null
-        }
-
-        const edges = this.model.edges
-        if (edges.length === 0)
-            return
-
-        const positions = new Float32Array(edges.length * 6)
-        edges.forEach((edge: any, index: number) => {
-            positions[index * 6] = edge.x0
-            positions[index * 6 + 1] = edge.y0
-            positions[index * 6 + 2] = edge.z0
-            positions[index * 6 + 3] = edge.x1
-            positions[index * 6 + 4] = edge.y1
-            positions[index * 6 + 5] = edge.z1
-        })
-
-        const geometry = new THREE.BufferGeometry()
-        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
-
-        const material = new THREE.LineBasicMaterial({color: 0x888888, transparent: true, opacity: 0.35})
-        this._edges = new THREE.LineSegments(geometry, material)
-        this._scene.add(this._edges)
-    }
-
-    private _onPointerMove(event: MouseEvent): void {
-        if (this._renderer == null || this._camera == null || this._points == null)
-            return
-        const rect = this._renderer.domElement.getBoundingClientRect()
-        const x = (event.clientX - rect.left) / rect.width
-        const y = (event.clientY - rect.top) / rect.height
-        this._mouse.x = x * 2 - 1
-        this._mouse.y = -(y * 2 - 1)
-        this._raycaster.setFromCamera(this._mouse, this._camera)
-        const intersections = this._raycaster.intersectObject(this._points)
-        if (intersections.length > 0) {
-            const index = intersections[0].index ?? 0
-            this._showTooltip(index, event)
-        } else {
-            this._hideTooltip()
-        }
-    }
-
-    private _showTooltip(index: number, event: MouseEvent): void {
-        if (this._tooltip == null || this._renderer == null)
-            return
-        const data = this.model.data as any
-        const name = data.name?.[index] ?? ""
-        const family = data.family?.[index] ?? ""
-        const release = data.release?.[index] ?? ""
-        const innovation = data.innovation?.[index] ?? ""
-        const influences = data.influences?.[index] ?? "None"
-
-        this._tooltip.innerHTML = `
-            <div class="tooltip-title">${name}</div>
-            <div class="tooltip-row"><span>Family</span><span>${family}</span></div>
-            <div class="tooltip-row"><span>Released</span><span>${release}</span></div>
-            <div class="tooltip-row"><span>Innovation</span><span>${innovation}</span></div>
-            <div class="tooltip-row"><span>Influences</span><span>${influences}</span></div>
-        `
-        const rect = this._renderer.domElement.getBoundingClientRect()
-        const left = event.clientX - rect.left + 14
-        const top = event.clientY - rect.top + 14
-        this._tooltip.style.left = `${left}px`
-        this._tooltip.style.top = `${top}px`
-        this._tooltip.style.display = "block"
-    }
-
-    private _hideTooltip(): void {
-        if (this._tooltip != null) {
-            this._tooltip.style.display = "none"
-        }
-    }
-
-    private _resize(): void {
-        if (this._renderer == null || this._camera == null || this._container == null)
-            return
-        const width = this._container.clientWidth || 800
-        const height = this._container.clientHeight || 600
-        this._renderer.setSize(width, height, false)
-        this._camera.aspect = width / height
-        this._camera.updateProjectionMatrix()
-        this._updateOverlayPositions()
-    }
-
-    private _startAnimationLoop(): void {
-        if (this._animationHandle != null)
-            return
-        const renderFrame = () => {
-            this._animationHandle = requestAnimationFrame(renderFrame)
-            if (this._controls != null)
-                this._controls.update()
-            if (this._renderer != null && this._scene != null && this._camera != null)
-                this._renderer.render(this._scene, this._camera)
-            this._updateOverlayPositions()
-        }
-        renderFrame()
-    }
-}
-
-export namespace ThreeDScatter {
-    export type Attrs = p.AttrsOf<Props>
-    export type Props = LayoutDOM.Props & {
-        data: p.Property<Record<string, unknown[]>>
-        edges: p.Property<Record<string, unknown>[]>
-        axis_labels: p.Property<Record<string, string>>
-        axis_limits: p.Property<Record<string, number[]>>
-        categories: p.Property<Record<string, unknown[]>>
-        legend_items: p.Property<Record<string, unknown>[]>
-        point_size: p.Property<number>
-        background_color: p.Property<string>
-        instructions: p.Property<string>
-    }
-}
-
-export interface ThreeDScatter extends ThreeDScatter.Attrs {}
-
-export class ThreeDScatter extends LayoutDOM {
-    declare properties: ThreeDScatter.Props
-    declare __view_type__: ThreeDScatterView
-
-    static override __module__ = "app.llm_phylogeny"
-
-    static {
-        this.prototype.default_view = ThreeDScatterView
-        this.define<ThreeDScatter.Props>(({Dict, List, Float, String, Any}) => ({
-            data: [Dict(String, List(Any)), {}],
-            edges: [List(Dict(String, Any)), []],
-            axis_labels: [Dict(String, String), {}],
-            axis_limits: [Dict(String, List(Float)), {}],
-            categories: [Dict(String, List(Any)), {}],
-            legend_items: [List(Dict(String, Any)), []],
-            point_size: [Float, 18],
-            background_color: [String, "#080b12"],
-            instructions: [String, ""],
-        }))
-    }
-}
-        """
-    )
-
-    data = BkDict(BkString, BkList(BkAny), default=dict)
-    edges = BkList(BkDict(BkString, BkAny), default=list)
-    axis_labels = BkDict(BkString, BkString, default=dict)
-    axis_limits = BkDict(BkString, BkList(BkFloat), default=dict)
-    categories = BkDict(BkString, BkList(BkAny), default=dict)
-    legend_items = BkList(BkDict(BkString, BkAny), default=list)
-    point_size = BkFloat(default=18.0)
-    background_color = BkString(default="#080b12")
-    instructions = BkString(default="")
 
 
 def _parse_date(raw: str) -> dt.datetime:
@@ -886,8 +179,8 @@ def _construct_bokeh_figure(
     graph: nx.DiGraph,
     layout: TimelineLayout,
     color_map: Dict[str, str],
-) -> ThreeDScatter:
-    """Create the interactive 3D Bokeh figure from prepared components."""
+) -> tuple[Div, Dict[str, object], str]:
+    """Create the interactive 3D figure rendered inside a Bokeh ``Div`` widget."""
 
     if not models:
         raise ValueError("No models were provided to construct the 3D figure")
@@ -1000,28 +293,416 @@ def _construct_bokeh_figure(
         "Panels list the indices used on the model and innovation axes."
     )
 
-    scatter = ThreeDScatter(
-        width=1200,
-        height=800,
-        data=node_data,
-        edges=edge_pairs,
-        axis_labels=axis_labels,
-        axis_limits=axis_limits,
-        categories=category_data,
-        legend_items=legend_items,
-        instructions=instructions,
-        point_size=16.0,
-        background_color="#05070d",
-    )
+    config = {
+        "data": node_data,
+        "edges": edge_pairs,
+        "axis_labels": axis_labels,
+        "axis_limits": axis_limits,
+        "categories": category_data,
+        "legend_items": legend_items,
+        "point_size": 16.0,
+        "background_color": "#05070d",
+        "instructions": instructions,
+    }
 
-    return scatter
+    div, container_id = _build_threejs_div(config, width=1200, height=800)
+    return div, config, container_id
+
+
+
+def _build_threejs_div(config: Dict[str, object], *, width: int, height: int) -> tuple[Div, str]:
+    """Create a placeholder ``Div`` and identifier for post-processed Three.js wiring."""
+
+    container_id = f"three-phylogeny-{uuid.uuid4().hex}"
+    placeholder = f"__THREE_PHYLOGENY::{container_id}__"
+    div = Div(text=placeholder, width=width, height=height, render_as_text=False)
+    return div, container_id
+
+
+
+def _inject_threejs_html(
+    destination: Path,
+    *,
+    container_id: str,
+    config: Dict[str, object],
+    width: int,
+    height: int,
+) -> None:
+    """Post-process the saved HTML to embed the Three.js bootstrap script."""
+
+    html = destination.read_text(encoding="utf-8")
+    placeholder = f"__THREE_PHYLOGENY::{container_id}__"
+    container_markup = (
+        f'<div id="{container_id}" '
+        "class=\"three-phylogeny-container\" style=\"width:100%;height:100%;\"></div>"
+    )
+    if placeholder in html:
+        escaped_markup = json.dumps(container_markup)[1:-1]
+        html = html.replace(placeholder, escaped_markup)
+    elif container_markup not in html:
+        raise RuntimeError(
+            "Unable to locate Three.js container markup in saved HTML."
+        )
+
+    css_rules = """
+.three-phylogeny-container { position: relative; width: 100%; height: 100%; font-family: 'Inter','Helvetica Neue',Arial,sans-serif; }
+.three-phylogeny-overlay { position: absolute; inset: 0; pointer-events: none; color: #f8fafc; }
+.three-phylogeny-tooltip { position: absolute; min-width: 220px; background: rgba(15,23,42,0.92); border: 1px solid rgba(148,163,184,0.35); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.4; display: none; pointer-events: none; box-shadow: 0 10px 30px rgba(15,23,42,0.45); backdrop-filter: blur(6px); }
+.three-phylogeny-tooltip-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: #e2e8f0; }
+.three-phylogeny-tooltip-row { display: flex; justify-content: space-between; margin-bottom: 4px; gap: 12px; }
+.three-phylogeny-tooltip-row span:first-child { opacity: 0.75; }
+.three-phylogeny-axis-panel { position: absolute; bottom: 20px; left: 20px; padding: 12px 16px; border-radius: 10px; background: rgba(15,23,42,0.72); border: 1px solid rgba(148,163,184,0.35); backdrop-filter: blur(6px); box-shadow: 0 8px 25px rgba(15,23,42,0.35); pointer-events: auto; max-width: 360px; font-size: 13px; line-height: 1.5; }
+.three-phylogeny-axis-row { display: flex; justify-content: space-between; margin-bottom: 4px; gap: 12px; }
+.three-phylogeny-axis-row span:last-child { font-weight: 600; }
+.three-phylogeny-legend { position: absolute; top: 20px; left: 20px; display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 8px 14px; padding: 14px 16px; background: rgba(15,23,42,0.72); border-radius: 12px; border: 1px solid rgba(148,163,184,0.35); box-shadow: 0 8px 25px rgba(15,23,42,0.35); backdrop-filter: blur(6px); pointer-events: auto; }
+.three-phylogeny-legend-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #e2e8f0; }
+.three-phylogeny-swatch { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 2px 8px rgba(15,23,42,0.45); border: 1px solid rgba(15,23,42,0.4); display: inline-block; }
+.three-phylogeny-categories { position: absolute; right: 20px; top: 20px; display: grid; gap: 12px; width: min(320px, 28%); pointer-events: auto; }
+.three-phylogeny-category { background: rgba(15,23,42,0.72); border-radius: 12px; border: 1px solid rgba(148,163,184,0.35); padding: 14px 16px; backdrop-filter: blur(6px); box-shadow: 0 8px 25px rgba(15,23,42,0.35); max-height: 240px; overflow-y: auto; font-size: 12.5px; line-height: 1.5; }
+.three-phylogeny-category h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.01em; text-transform: uppercase; opacity: 0.8; }
+.three-phylogeny-category ul { margin: 0; padding-left: 18px; }
+.three-phylogeny-category li { margin-bottom: 4px; }
+.three-phylogeny-instructions { position: absolute; right: 20px; bottom: 20px; padding: 12px 16px; border-radius: 12px; background: rgba(15,23,42,0.72); border: 1px solid rgba(148,163,184,0.35); backdrop-filter: blur(6px); font-size: 13px; max-width: min(360px, 40%); box-shadow: 0 8px 25px rgba(15,23,42,0.35); pointer-events: auto; }
+.three-phylogeny-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #f8fafc; font-size: 16px; background: rgba(15,23,42,0.9); border-radius: 12px; }
+""".strip()
+
+    script_template = """
+(function() {
+  const CONFIG = __CONFIG__;
+  const CSS_RULES = __CSS__;
+  const TARGET_ID = '__CONTAINER_ID__';
+
+  function waitForHost() {
+    return new Promise((resolve) => {
+      let attempts = 0;
+      function check() {
+        const host = document.querySelector('[data-root-id] .bk-Div');
+        if (host) {
+          resolve(host);
+          return;
+        }
+        attempts += 1;
+        if (attempts > 200) {
+          console.error('Three.js host element not found');
+          resolve(null);
+          return;
+        }
+        requestAnimationFrame(check);
+      }
+      check();
+    });
+  }
+
+  waitForHost().then((host) => {
+    if (!host) {
+      return;
+    }
+
+    let container = document.getElementById(TARGET_ID);
+    if (!container) {
+      container = document.createElement('div');
+      container.id = TARGET_ID;
+      container.className = 'three-phylogeny-container';
+      container.style.width = '100%';
+      container.style.height = '100%';
+      host.innerHTML = '';
+      host.appendChild(container);
+    }
+
+    if (!document.getElementById('three-phylogeny-style')) {
+      const style = document.createElement('style');
+      style.id = 'three-phylogeny-style';
+      style.textContent = CSS_RULES;
+      document.head.appendChild(style);
+    }
+
+    function loadScript(url) {
+    return new Promise((resolve, reject) => {
+      const existing = Array.from(document.getElementsByTagName('script')).find((el) => el.src === url);
+      if (existing) {
+        if (existing.dataset.loaded === 'true') {
+          resolve();
+        } else {
+          const handle = () => { existing.dataset.loaded = 'true'; resolve(); };
+          existing.addEventListener('load', handle, {once: true});
+          existing.addEventListener('error', () => reject(new Error('Failed to load ' + url)), {once: true});
+        }
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = url;
+      script.dataset.loaded = 'false';
+      script.addEventListener('load', () => { script.dataset.loaded = 'true'; resolve(); }, {once: true});
+      script.addEventListener('error', () => reject(new Error('Failed to load ' + url)), {once: true});
+      document.head.appendChild(script);
+    });
+  }
+
+    const ensureThree = loadScript('assets/three.min.js');
+    ensureThree
+      .then(() => loadScript('assets/OrbitControls.js'))
+      .then(init)
+      .catch((err) => {
+        container.innerHTML = '<div class="three-phylogeny-error">Unable to load 3D resources. See console for details.</div>';
+        console.error(err);
+      });
+
+  function init() {
+    if (!(window.THREE && window.THREE.OrbitControls)) {
+      console.error('Three.js resources missing');
+      container.innerHTML = '<div class="three-phylogeny-error">Three.js resources missing.</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    const renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(CONFIG.background_color || '#05070d');
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+    scene.add(ambient);
+    const directional = new THREE.DirectionalLight(0xffffff, 0.65);
+    directional.position.set(1.2, 1.6, 2.4);
+    scene.add(directional);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'three-phylogeny-overlay';
+    container.appendChild(overlay);
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'three-phylogeny-tooltip';
+    overlay.appendChild(tooltip);
+
+    const axisPanel = document.createElement('div');
+    axisPanel.className = 'three-phylogeny-axis-panel';
+    overlay.appendChild(axisPanel);
+
+    ['x','y','z'].forEach((key) => {
+      const row = document.createElement('div');
+      row.className = 'three-phylogeny-axis-row';
+      const label = document.createElement('span');
+      label.textContent = CONFIG.axis_labels?.[key] || key.toUpperCase();
+      const span = document.createElement('span');
+      const limits = CONFIG.axis_limits?.[key] || [];
+      span.textContent = limits.map((value) => Number(value).toFixed(1)).join(' → ');
+      row.appendChild(label);
+      row.appendChild(span);
+      axisPanel.appendChild(row);
+    });
+
+    const legend = document.createElement('div');
+    legend.className = 'three-phylogeny-legend';
+    (CONFIG.legend_items || []).forEach((item) => {
+      const entry = document.createElement('div');
+      entry.className = 'three-phylogeny-legend-item';
+      entry.innerHTML = `<span class="three-phylogeny-swatch" style="background:${item.color || '#ffffff'}"></span><span>${item.label || ''}</span>`;
+      legend.appendChild(entry);
+    });
+    overlay.appendChild(legend);
+
+    const categoryWrap = document.createElement('div');
+    categoryWrap.className = 'three-phylogeny-categories';
+    overlay.appendChild(categoryWrap);
+
+    function buildCategory(key, title) {
+      const data = CONFIG.categories?.[key] || [];
+      if (!Array.isArray(data) || data.length === 0)
+        return;
+      const panel = document.createElement('div');
+      panel.className = 'three-phylogeny-category';
+      const heading = document.createElement('h3');
+      heading.textContent = title;
+      panel.appendChild(heading);
+      const list = document.createElement('ul');
+      data.forEach((entry) => {
+        const item = document.createElement('li');
+        item.textContent = `${entry.index}: ${entry.label}`;
+        list.appendChild(item);
+      });
+      panel.appendChild(list);
+      categoryWrap.appendChild(panel);
+    }
+
+    buildCategory('models', 'Model index');
+    buildCategory('innovations', 'Innovation index');
+
+    if (CONFIG.instructions) {
+      const instructions = document.createElement('div');
+      instructions.className = 'three-phylogeny-instructions';
+      instructions.textContent = CONFIG.instructions;
+      overlay.appendChild(instructions);
+    }
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const nodeData = CONFIG.data || {};
+    const count = (nodeData.x || []).length;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = Number(nodeData.x?.[i] ?? 0);
+      positions[i * 3 + 1] = Number(nodeData.y?.[i] ?? 0);
+      positions[i * 3 + 2] = Number(nodeData.z?.[i] ?? 0);
+      const color = new THREE.Color(nodeData.color?.[i] || '#ffffff');
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+    }
+
+    const pointGeometry = new THREE.BufferGeometry();
+    pointGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    pointGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const pointMaterial = new THREE.PointsMaterial({size: CONFIG.point_size || 16, vertexColors: true, sizeAttenuation: true});
+    const points = new THREE.Points(pointGeometry, pointMaterial);
+    scene.add(points);
+
+    const edges = CONFIG.edges || [];
+    if (edges.length > 0) {
+      const edgePositions = new Float32Array(edges.length * 6);
+      edges.forEach((edge, index) => {
+        edgePositions[index * 6] = Number(edge.x0 ?? 0);
+        edgePositions[index * 6 + 1] = Number(edge.y0 ?? 0);
+        edgePositions[index * 6 + 2] = Number(edge.z0 ?? 0);
+        edgePositions[index * 6 + 3] = Number(edge.x1 ?? 0);
+        edgePositions[index * 6 + 4] = Number(edge.y1 ?? 0);
+        edgePositions[index * 6 + 5] = Number(edge.z1 ?? 0);
+      });
+      const edgeGeometry = new THREE.BufferGeometry();
+      edgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(edgePositions, 3));
+      const edgeMaterial = new THREE.LineBasicMaterial({color: 0x8891a7, transparent: true, opacity: 0.35});
+      const edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+      scene.add(edgeLines);
+    }
+
+    const limits = CONFIG.axis_limits || {};
+    const xLimits = limits.x || [0, 1];
+    const yLimits = limits.y || [0, 1];
+    const zLimits = limits.z || [0, 1];
+    const origin = new THREE.Vector3(xLimits[0], yLimits[0], zLimits[0]);
+    const axisGroup = new THREE.Group();
+    const axisDefs = [
+      {dir: new THREE.Vector3(xLimits[1] - xLimits[0], 0, 0), color: 0xff6b6b},
+      {dir: new THREE.Vector3(0, yLimits[1] - yLimits[0], 0), color: 0x4ecdc4},
+      {dir: new THREE.Vector3(0, 0, zLimits[1] - zLimits[0]), color: 0x1a8cff},
+    ];
+    axisDefs.forEach((axis) => {
+      const geom = new THREE.BufferGeometry().setFromPoints([
+        origin,
+        origin.clone().add(axis.dir),
+      ]);
+      axisGroup.add(new THREE.Line(geom, new THREE.LineBasicMaterial({color: axis.color})));
+    });
+    scene.add(axisGroup);
+
+    function showTooltip(index, event) {
+      const name = nodeData.name?.[index] ?? '';
+      const family = nodeData.family?.[index] ?? '';
+      const release = nodeData.release?.[index] ?? '';
+      const innovation = nodeData.innovation?.[index] ?? '';
+      const influences = nodeData.influences?.[index] ?? 'None';
+      tooltip.innerHTML = `
+        <div class="three-phylogeny-tooltip-title">${name}</div>
+        <div class="three-phylogeny-tooltip-row"><span>Family</span><span>${family}</span></div>
+        <div class="three-phylogeny-tooltip-row"><span>Released</span><span>${release}</span></div>
+        <div class="three-phylogeny-tooltip-row"><span>Innovation</span><span>${innovation}</span></div>
+        <div class="three-phylogeny-tooltip-row"><span>Influences</span><span>${influences}</span></div>
+      `;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const left = event.clientX - rect.left + 14;
+      const top = event.clientY - rect.top + 14;
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${top}px`;
+      tooltip.style.display = 'block';
+    }
+
+    function hideTooltip() {
+      tooltip.style.display = 'none';
+    }
+
+    function onPointerMove(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+      raycaster.setFromCamera(mouse, camera);
+      const intersections = raycaster.intersectObject(points);
+      if (intersections.length > 0 && intersections[0].index != null) {
+        showTooltip(intersections[0].index, event);
+      } else {
+        hideTooltip();
+      }
+    }
+
+    renderer.domElement.addEventListener('mousemove', onPointerMove);
+    renderer.domElement.addEventListener('mouseleave', hideTooltip);
+
+    function resize() {
+      const viewWidth = container.clientWidth || __WIDTH__;
+      const viewHeight = container.clientHeight || __HEIGHT__;
+      renderer.setSize(viewWidth, viewHeight, false);
+      camera.aspect = viewWidth / viewHeight;
+      camera.updateProjectionMatrix();
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    const spanX = xLimits[1] - xLimits[0];
+    const spanY = yLimits[1] - yLimits[0];
+    const spanZ = zLimits[1] - zLimits[0];
+    const maxSpan = Math.max(spanX, spanY, spanZ, 1);
+    camera.position.set(origin.x + spanX * 0.6, origin.y + spanY * 0.5, origin.z + maxSpan * 2.2);
+    controls.target.copy(origin.clone().add(new THREE.Vector3(spanX / 2, spanY / 2, spanZ / 2)));
+
+    function renderLoop() {
+      requestAnimationFrame(renderLoop);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    renderLoop();
+  }
+  });
+})();
+"""
+
+    replacements = {
+        "__CONFIG__": json.dumps(config),
+        "__CONTAINER_ID__": container_id,
+        "__CSS__": json.dumps(css_rules),
+        "__WIDTH__": str(width),
+        "__HEIGHT__": str(height),
+    }
+
+    script_body = script_template
+    for key, value in replacements.items():
+        script_body = script_body.replace(key, value)
+
+    script_tag = f"<script type=\"text/javascript\">\n{script_body}\n</script>"
+
+    insertion_point = html.rfind("</body>")
+    if insertion_point == -1:
+        insertion_point = len(html)
+
+    updated_html = html[:insertion_point] + script_tag + "\n" + html[insertion_point:]
+    destination.write_text(updated_html, encoding="utf-8")
+
 
 
 def build_plot(*, data_path: Path | None = None):
     """Construct the interactive Bokeh plot for the phylogenetic graph."""
 
     models, graph, layout, color_map = _prepare_visualisation(data_path=data_path)
-    return _construct_bokeh_figure(models, graph, layout, color_map)
+    plot, _, _ = _construct_bokeh_figure(models, graph, layout, color_map)
+    return plot
 
 
 def export_static_svg(
@@ -1130,11 +811,12 @@ def main(
 ) -> Path:
     """Generate the phylogeny plot and write it to an HTML file."""
     models, graph, layout, color_map = _prepare_visualisation(data_path=data_path)
-    plot = _construct_bokeh_figure(models, graph, layout, color_map)
+    plot, config, container_id = _construct_bokeh_figure(models, graph, layout, color_map)
     if output_path is None:
         output_path = DEFAULT_OUTPUT_PATH
     output_file(str(output_path), title="LLM Phylogeny")
     save(plot)
+    _inject_threejs_html(output_path, container_id=container_id, config=config, width=plot.width or 1200, height=plot.height or 800)
     if svg_output_path is not None:
         export_static_svg(graph, layout, color_map, svg_output_path)
     if open_browser:
