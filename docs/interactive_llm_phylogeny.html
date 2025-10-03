@@ -12,16 +12,612 @@
         padding: 0;
       }
     </style>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.min.js"></script>
 <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-3.8.0.min.js"></script>
 <script type="text/javascript">
 Bokeh.set_log_level("info");
 </script>
+<script type="text/javascript">
+(function(root, factory) {
+    factory(root["Bokeh"]);
+})(this, function(Bokeh) {
+  let define;
+  return (function outer(modules, entry) {
+  if (Bokeh != null) {
+    return Bokeh.register_plugin(modules, entry);
+  } else {
+    throw new Error("Cannot find Bokeh. You have to load it prior to loading plugins.");
+  }
+})
+({
+  "custom/main": function(require, module, exports) {
+    const models = {
+      "ThreeDScatter": require("custom/three_d_scatter").ThreeDScatter
+    };
+    require("base").register_models(models);
+    module.exports = models;
+  },
+  "custom/three_d_scatter": function(require, module, exports) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ThreeDScatter = exports.ThreeDScatterView = void 0;
+const layout_dom_1 = require("models/layouts/layout_dom");
+class ThreeDScatterView extends layout_dom_1.LayoutDOMView {
+    _container = null;
+    _renderer = null;
+    _scene = null;
+    _camera = null;
+    _controls = null;
+    _points = null;
+    _edges = null;
+    _axisGroup = null;
+    _axisVectors = null;
+    _raycaster;
+    _mouse;
+    _overlay = null;
+    _tooltip = null;
+    _axisLabels = {};
+    _legendEl = null;
+    _categoryEls = {};
+    _instructionsEl = null;
+    _animationHandle = null;
+    _handleResize = () => this._resize();
+    _handlePointerMove = (event) => this._onPointerMove(event);
+    _handlePointerLeave = () => this._hideTooltip();
+    constructor(options) {
+        super(options);
+        this._raycaster = new THREE.Raycaster();
+        this._mouse = new THREE.Vector2();
+    }
+    connect_signals() {
+        super.connect_signals();
+        const { data, edges, axis_labels, axis_limits, categories, legend_items, point_size, background_color, instructions, } = this.model.properties;
+        this.on_change(data, () => this._updatePoints());
+        this.on_change(edges, () => this._updateEdges());
+        this.on_change(axis_labels, () => this._updateAxisLabels());
+        this.on_change(axis_limits, () => this._rebuildAxes());
+        this.on_change(categories, () => this._buildCategories());
+        this.on_change(legend_items, () => this._buildLegend());
+        this.on_change(point_size, () => this._updatePointSize());
+        this.on_change(background_color, () => this._updateBackground());
+        this.on_change(instructions, () => this._updateInstructions());
+    }
+    remove() {
+        super.remove();
+        if (this._animationHandle != null) {
+            cancelAnimationFrame(this._animationHandle);
+            this._animationHandle = null;
+        }
+        if (this._controls != null) {
+            this._controls.dispose();
+            this._controls = null;
+        }
+        if (this._renderer != null) {
+            this._renderer.dispose();
+            this._renderer = null;
+        }
+        window.removeEventListener("resize", this._handleResize);
+    }
+    render() {
+        super.render();
+        if (this._container == null) {
+            this._container = document.createElement("div");
+            this._container.style.position = "relative";
+            this._container.style.width = "100%";
+            this._container.style.height = "100%";
+            this.shadow_el.appendChild(this._container);
+            this._initThree();
+            this._buildOverlay();
+            this._buildLegend();
+            this._buildCategories();
+            this._updateInstructions();
+            const canvas = this._renderer.domElement;
+            canvas.style.width = "100%";
+            canvas.style.height = "100%";
+            canvas.addEventListener("mousemove", this._handlePointerMove);
+            canvas.addEventListener("mouseleave", this._handlePointerLeave);
+            window.addEventListener("resize", this._handleResize);
+        }
+        this._resize();
+        this._updateBackground();
+        this._rebuildAxes();
+        this._updatePoints();
+        this._updateEdges();
+        this._startAnimationLoop();
+    }
+    _initThree() {
+        if (this._container == null)
+            return;
+        this._renderer = new THREE.WebGLRenderer({ antialias: true });
+        this._renderer.setPixelRatio(window.devicePixelRatio || 1);
+        this._container.appendChild(this._renderer.domElement);
+        this._scene = new THREE.Scene();
+        this._camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
+        this._camera.position.set(0, 0, 100);
+        this._controls = new THREE.OrbitControls(this._camera, this._renderer.domElement);
+        this._controls.enableDamping = true;
+        this._controls.dampingFactor = 0.08;
+        const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+        this._scene.add(ambient);
+        const directional = new THREE.DirectionalLight(0xffffff, 0.65);
+        directional.position.set(1.2, 1.6, 2.4);
+        this._scene.add(directional);
+    }
+    _buildOverlay() {
+        if (this._container == null)
+            return;
+        const style = document.createElement("style");
+        style.textContent = `
+            :host {
+                font-family: "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
+            }
+            .three-overlay {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                color: #f5f5f5;
+                font-size: 12px;
+            }
+            .three-tooltip {
+                position: absolute;
+                pointer-events: none;
+                background: rgba(12, 12, 18, 0.92);
+                border-radius: 8px;
+                padding: 10px 12px;
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+                min-width: 220px;
+                display: none;
+                line-height: 1.45;
+            }
+            .three-tooltip .tooltip-title {
+                font-weight: 600;
+                margin-bottom: 6px;
+            }
+            .three-tooltip .tooltip-row {
+                display: flex;
+                justify-content: space-between;
+                gap: 8px;
+            }
+            .three-tooltip .tooltip-row span:first-child {
+                color: #9fa8da;
+            }
+            .three-axis-label {
+                position: absolute;
+                transform: translate(-50%, -50%);
+                background: rgba(14, 15, 24, 0.78);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                border-radius: 4px;
+                padding: 4px 8px;
+                pointer-events: none;
+                font-size: 11px;
+                letter-spacing: 0.2px;
+            }
+            .three-legend,
+            .three-category-panel,
+            .three-instructions {
+                background: rgba(10, 12, 20, 0.78);
+                border-radius: 10px;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                backdrop-filter: blur(6px);
+                padding: 12px;
+                pointer-events: auto;
+            }
+            .three-legend {
+                position: absolute;
+                top: 18px;
+                right: 18px;
+                min-width: 200px;
+            }
+            .three-legend .legend-title {
+                font-weight: 600;
+                margin-bottom: 8px;
+            }
+            .three-legend .legend-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 4px;
+            }
+            .three-legend .legend-swatch {
+                width: 14px;
+                height: 14px;
+                border-radius: 50%;
+                border: 1px solid rgba(255, 255, 255, 0.65);
+            }
+            .three-category-panel {
+                position: absolute;
+                bottom: 18px;
+                max-height: 220px;
+                overflow-y: auto;
+                width: 260px;
+                line-height: 1.35;
+            }
+            .three-category-panel .panel-title {
+                font-weight: 600;
+                margin-bottom: 6px;
+            }
+            .three-category-panel .panel-row {
+                font-size: 11px;
+                margin-bottom: 4px;
+            }
+            .three-category-panel.models {
+                left: 18px;
+            }
+            .three-category-panel.innovations {
+                right: 18px;
+            }
+            .three-instructions {
+                position: absolute;
+                top: 18px;
+                left: 18px;
+                max-width: 260px;
+                line-height: 1.5;
+                font-size: 12px;
+            }
+        `;
+        this.shadow_el.appendChild(style);
+        this._overlay = document.createElement("div");
+        this._overlay.className = "three-overlay";
+        this._container.appendChild(this._overlay);
+        this._tooltip = document.createElement("div");
+        this._tooltip.className = "three-tooltip";
+        this._overlay.appendChild(this._tooltip);
+        this._axisLabels = {
+            x: document.createElement("div"),
+            y: document.createElement("div"),
+            z: document.createElement("div"),
+        };
+        for (const key of Object.keys(this._axisLabels)) {
+            const element = this._axisLabels[key];
+            element.className = "three-axis-label";
+            this._overlay.appendChild(element);
+        }
+        this._instructionsEl = document.createElement("div");
+        this._instructionsEl.className = "three-instructions";
+        this._overlay.appendChild(this._instructionsEl);
+    }
+    _buildLegend() {
+        if (this._overlay == null)
+            return;
+        if (this._legendEl != null) {
+            this._legendEl.remove();
+            this._legendEl = null;
+        }
+        const items = this.model.legend_items;
+        if (items.length === 0)
+            return;
+        const legend = document.createElement("div");
+        legend.className = "three-legend";
+        const title = document.createElement("div");
+        title.className = "legend-title";
+        title.textContent = "Model families";
+        legend.appendChild(title);
+        for (const item of items) {
+            const row = document.createElement("div");
+            row.className = "legend-item";
+            const swatch = document.createElement("span");
+            swatch.className = "legend-swatch";
+            swatch.style.background = item.color ?? "#cccccc";
+            row.appendChild(swatch);
+            const label = document.createElement("span");
+            label.textContent = item.label ?? "";
+            row.appendChild(label);
+            legend.appendChild(row);
+        }
+        this._overlay.appendChild(legend);
+        this._legendEl = legend;
+    }
+    _buildCategories() {
+        if (this._overlay == null)
+            return;
+        for (const key of Object.keys(this._categoryEls)) {
+            const panel = this._categoryEls[key];
+            panel.remove();
+        }
+        this._categoryEls = {};
+        const categories = this.model.categories;
+        const modelEntries = categories["models"] ?? [];
+        if (modelEntries.length > 0) {
+            const panel = document.createElement("div");
+            panel.className = "three-category-panel models";
+            panel.innerHTML = '<div class="panel-title">Model indices</div>';
+            for (const entry of modelEntries) {
+                const row = document.createElement("div");
+                row.className = "panel-row";
+                row.textContent = `${entry.index}: ${entry.label}`;
+                panel.appendChild(row);
+            }
+            this._overlay.appendChild(panel);
+            this._categoryEls["models"] = panel;
+        }
+        const innovationEntries = categories["innovations"] ?? [];
+        if (innovationEntries.length > 0) {
+            const panel = document.createElement("div");
+            panel.className = "three-category-panel innovations";
+            panel.innerHTML = '<div class="panel-title">Technical innovations</div>';
+            for (const entry of innovationEntries) {
+                const row = document.createElement("div");
+                row.className = "panel-row";
+                row.textContent = `${entry.index}: ${entry.label}`;
+                panel.appendChild(row);
+            }
+            this._overlay.appendChild(panel);
+            this._categoryEls["innovations"] = panel;
+        }
+    }
+    _updateInstructions() {
+        if (this._instructionsEl != null) {
+            this._instructionsEl.textContent = this.model.instructions;
+        }
+    }
+    _rebuildAxes() {
+        if (this._scene == null)
+            return;
+        if (this._axisGroup != null) {
+            this._scene.remove(this._axisGroup);
+            this._axisGroup = null;
+        }
+        const limits = this.model.axis_limits;
+        const xLimits = limits["x"] ?? null;
+        const yLimits = limits["y"] ?? null;
+        const zLimits = limits["z"] ?? null;
+        if (xLimits == null || yLimits == null || zLimits == null)
+            return;
+        const origin = new THREE.Vector3(xLimits[0], yLimits[0], zLimits[0]);
+        const xEnd = new THREE.Vector3(xLimits[1], yLimits[0], zLimits[0]);
+        const yEnd = new THREE.Vector3(xLimits[0], yLimits[1], zLimits[0]);
+        const zEnd = new THREE.Vector3(xLimits[0], yLimits[0], zLimits[1]);
+        const makeLine = (start, end, color) => {
+            const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+            const material = new THREE.LineBasicMaterial({ color, linewidth: 1.5 });
+            return new THREE.Line(geometry, material);
+        };
+        const axisGroup = new THREE.Group();
+        axisGroup.add(makeLine(origin, xEnd, 0x5dade2));
+        axisGroup.add(makeLine(origin, yEnd, 0x58d68d));
+        axisGroup.add(makeLine(origin, zEnd, 0xf4d03f));
+        this._scene.add(axisGroup);
+        this._axisGroup = axisGroup;
+        this._axisVectors = { origin, x: xEnd, y: yEnd, z: zEnd };
+        this._positionCamera(xLimits, yLimits, zLimits);
+        this._updateAxisLabels();
+        this._updateOverlayPositions();
+    }
+    _positionCamera(xLimits, yLimits, zLimits) {
+        if (this._camera == null || this._controls == null)
+            return;
+        const center = new THREE.Vector3((xLimits[0] + xLimits[1]) / 2, (yLimits[0] + yLimits[1]) / 2, (zLimits[0] + zLimits[1]) / 2);
+        const spanX = Math.max(1, Math.abs(xLimits[1] - xLimits[0]));
+        const spanY = Math.max(1, Math.abs(yLimits[1] - yLimits[0]));
+        const spanZ = Math.max(1, Math.abs(zLimits[1] - zLimits[0]));
+        const maxSpan = Math.max(spanX, spanY, spanZ);
+        this._camera.position.set(center.x + maxSpan * 1.6, center.y + maxSpan * 1.15, center.z + maxSpan * 1.8);
+        this._controls.target.copy(center);
+        this._controls.update();
+    }
+    _updateAxisLabels() {
+        const labels = this.model.axis_labels;
+        if (this._axisLabels.x != null) {
+            this._axisLabels.x.textContent = labels.x ?? "Time";
+        }
+        if (this._axisLabels.y != null) {
+            this._axisLabels.y.textContent = labels.y ?? "Model";
+        }
+        if (this._axisLabels.z != null) {
+            this._axisLabels.z.textContent = labels.z ?? "Innovation";
+        }
+        this._updateOverlayPositions();
+    }
+    _updateOverlayPositions() {
+        if (this._renderer == null ||
+            this._camera == null ||
+            this._axisVectors == null) {
+            return;
+        }
+        const width = this._renderer.domElement.clientWidth;
+        const height = this._renderer.domElement.clientHeight;
+        const project = (vector) => {
+            const projected = vector.clone().project(this._camera);
+            return {
+                x: (projected.x + 1) / 2 * width,
+                y: (-projected.y + 1) / 2 * height,
+            };
+        };
+        const xPos = project(this._axisVectors.x);
+        if (this._axisLabels.x != null) {
+            this._axisLabels.x.style.left = `${xPos.x}px`;
+            this._axisLabels.x.style.top = `${xPos.y}px`;
+        }
+        const yPos = project(this._axisVectors.y);
+        if (this._axisLabels.y != null) {
+            this._axisLabels.y.style.left = `${yPos.x}px`;
+            this._axisLabels.y.style.top = `${yPos.y}px`;
+        }
+        const zPos = project(this._axisVectors.z);
+        if (this._axisLabels.z != null) {
+            this._axisLabels.z.style.left = `${zPos.x}px`;
+            this._axisLabels.z.style.top = `${zPos.y}px`;
+        }
+    }
+    _updateBackground() {
+        if (this._scene != null) {
+            this._scene.background = new THREE.Color(this.model.background_color);
+        }
+    }
+    _updatePoints() {
+        if (this._scene == null)
+            return;
+        if (this._points != null) {
+            this._scene.remove(this._points);
+            this._points.geometry.dispose();
+            this._points.material.dispose();
+            this._points = null;
+        }
+        const data = this.model.data;
+        const xs = data.x ?? [];
+        const ys = data.y ?? [];
+        const zs = data.z ?? [];
+        if (xs.length === 0)
+            return;
+        const colors = data.color ?? [];
+        const positions = new Float32Array(xs.length * 3);
+        const colorValues = new Float32Array(xs.length * 3);
+        for (let i = 0; i < xs.length; i++) {
+            positions[i * 3] = xs[i];
+            positions[i * 3 + 1] = ys[i];
+            positions[i * 3 + 2] = zs[i];
+            const color = new THREE.Color(colors[i] ?? "#9fa8da");
+            colorValues[i * 3] = color.r;
+            colorValues[i * 3 + 1] = color.g;
+            colorValues[i * 3 + 2] = color.b;
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colorValues, 3));
+        const material = new THREE.PointsMaterial({
+            size: this.model.point_size,
+            vertexColors: true,
+            sizeAttenuation: true,
+        });
+        this._points = new THREE.Points(geometry, material);
+        this._scene.add(this._points);
+    }
+    _updatePointSize() {
+        if (this._points != null) {
+            this._points.material.size = this.model.point_size;
+        }
+    }
+    _updateEdges() {
+        if (this._scene == null)
+            return;
+        if (this._edges != null) {
+            this._scene.remove(this._edges);
+            this._edges.geometry.dispose();
+            this._edges.material.dispose();
+            this._edges = null;
+        }
+        const edges = this.model.edges;
+        if (edges.length === 0)
+            return;
+        const positions = new Float32Array(edges.length * 6);
+        edges.forEach((edge, index) => {
+            positions[index * 6] = edge.x0;
+            positions[index * 6 + 1] = edge.y0;
+            positions[index * 6 + 2] = edge.z0;
+            positions[index * 6 + 3] = edge.x1;
+            positions[index * 6 + 4] = edge.y1;
+            positions[index * 6 + 5] = edge.z1;
+        });
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        const material = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.35 });
+        this._edges = new THREE.LineSegments(geometry, material);
+        this._scene.add(this._edges);
+    }
+    _onPointerMove(event) {
+        if (this._renderer == null || this._camera == null || this._points == null)
+            return;
+        const rect = this._renderer.domElement.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width;
+        const y = (event.clientY - rect.top) / rect.height;
+        this._mouse.x = x * 2 - 1;
+        this._mouse.y = -(y * 2 - 1);
+        this._raycaster.setFromCamera(this._mouse, this._camera);
+        const intersections = this._raycaster.intersectObject(this._points);
+        if (intersections.length > 0) {
+            const index = intersections[0].index ?? 0;
+            this._showTooltip(index, event);
+        }
+        else {
+            this._hideTooltip();
+        }
+    }
+    _showTooltip(index, event) {
+        if (this._tooltip == null || this._renderer == null)
+            return;
+        const data = this.model.data;
+        const name = data.name?.[index] ?? "";
+        const family = data.family?.[index] ?? "";
+        const release = data.release?.[index] ?? "";
+        const innovation = data.innovation?.[index] ?? "";
+        const influences = data.influences?.[index] ?? "None";
+        this._tooltip.innerHTML = `
+            <div class="tooltip-title">${name}</div>
+            <div class="tooltip-row"><span>Family</span><span>${family}</span></div>
+            <div class="tooltip-row"><span>Released</span><span>${release}</span></div>
+            <div class="tooltip-row"><span>Innovation</span><span>${innovation}</span></div>
+            <div class="tooltip-row"><span>Influences</span><span>${influences}</span></div>
+        `;
+        const rect = this._renderer.domElement.getBoundingClientRect();
+        const left = event.clientX - rect.left + 14;
+        const top = event.clientY - rect.top + 14;
+        this._tooltip.style.left = `${left}px`;
+        this._tooltip.style.top = `${top}px`;
+        this._tooltip.style.display = "block";
+    }
+    _hideTooltip() {
+        if (this._tooltip != null) {
+            this._tooltip.style.display = "none";
+        }
+    }
+    _resize() {
+        if (this._renderer == null || this._camera == null || this._container == null)
+            return;
+        const width = this._container.clientWidth || 800;
+        const height = this._container.clientHeight || 600;
+        this._renderer.setSize(width, height, false);
+        this._camera.aspect = width / height;
+        this._camera.updateProjectionMatrix();
+        this._updateOverlayPositions();
+    }
+    _startAnimationLoop() {
+        if (this._animationHandle != null)
+            return;
+        const renderFrame = () => {
+            this._animationHandle = requestAnimationFrame(renderFrame);
+            if (this._controls != null)
+                this._controls.update();
+            if (this._renderer != null && this._scene != null && this._camera != null)
+                this._renderer.render(this._scene, this._camera);
+            this._updateOverlayPositions();
+        };
+        renderFrame();
+    }
+}
+exports.ThreeDScatterView = ThreeDScatterView;
+class ThreeDScatter extends layout_dom_1.LayoutDOM {
+    static __module__ = "app.llm_phylogeny";
+    static {
+        this.prototype.default_view = ThreeDScatterView;
+        this.define(({ Dict, List, Float, String, Any }) => ({
+            data: [Dict(String, List(Any)), {}],
+            edges: [List(Dict(String, Any)), []],
+            axis_labels: [Dict(String, String), {}],
+            axis_limits: [Dict(String, List(Float)), {}],
+            categories: [Dict(String, List(Any)), {}],
+            legend_items: [List(Dict(String, Any)), []],
+            point_size: [Float, 18],
+            background_color: [String, "#080b12"],
+            instructions: [String, ""],
+        }));
+    }
+}
+exports.ThreeDScatter = ThreeDScatter;
+
+}
+}, "custom/main");
+;
+});
+
+</script>
   </head>
   <body>
-    <div id="e94a46cc-4edd-4b54-ae9e-59a9d62e4c30" data-root-id="p1006" style="display: contents;"></div>
+    <div id="c03e34db-b9f0-4e60-9482-918fceade9da" data-root-id="p1006" style="display: contents;"></div>
   
-    <script type="application/json" id="c4543685-d7c8-4f05-90e3-440d0de391cf">
-      {"b8b35bf0-897c-49ff-a0a2-7d4556734a84":{"version":"3.8.0","title":"Bokeh Application","config":{"type":"object","name":"DocumentConfig","id":"p1284","attributes":{"notifications":{"type":"object","name":"Notifications","id":"p1285"}}},"roots":[{"type":"object","name":"Figure","id":"p1006","attributes":{"width":1200,"height":800,"x_range":{"type":"object","name":"Range1d","id":"p1016","attributes":{"start":1491091200000.0,"end":1761868800000.0}},"y_range":{"type":"object","name":"Range1d","id":"p1017","attributes":{"start":-1,"end":20}},"x_scale":{"type":"object","name":"LinearScale","id":"p1018"},"y_scale":{"type":"object","name":"LinearScale","id":"p1019"},"title":{"type":"object","name":"Title","id":"p1009","attributes":{"text":"Phylogeny of Transformer Language Models"}},"renderers":[{"type":"object","name":"GraphRenderer","id":"p1069","attributes":{"layout_provider":{"type":"object","name":"StaticLayoutProvider","id":"p1086","attributes":{"graph_layout":{"type":"map","entries":[["Attention Is All You Need",[1496275200000.0,15.0]],["GPT-1",[1527811200000.0,6.0]],["BERT",[1538352000000.0,5.0]],["Transformer-XL",[1546300800000.0,10.0]],["GPT-2",[1548979200000.0,6.0]],["XLNet",[1559347200000.0,5.0]],["RoBERTa",[1561939200000.0,5.0]],["Megatron-LM",[1564617600000.0,16.0]],["ALBERT",[1567296000000.0,5.0]],["BART",[1569888000000.0,17.0]],["T5",[1569888000000.0,17.15]],["ELECTRA",[1583020800000.0,5.0]],["GPT-3",[1588291200000.0,6.0]],["Switch Transformer",[1609459200000.0,12.0]],["LaMDA",[1619827200000.0,7.0]],["Gopher",[1638316800000.0,3.0]],["GLaM",[1638316800000.0,12.0]],["InstructGPT",[1640995200000.0,0.0]],["Chinchilla",[1646092800000.0,3.0]],["PaLM",[1648771200000.0,7.0]],["UL2",[1651363200000.0,17.0]],["OPT",[1651363200000.0,13.0]],["BLOOM",[1656633600000.0,13.0]],["Constitutional AI",[1669852800000.0,0.0]],["LLaMA",[1675209600000.0,9.0]],["GPT-4",[1677628800000.0,6.0]],["Claude 1",[1677628800000.0,2.0]],["Baichuan-7B",[1685577600000.0,1.0]],["Claude 2",[1688169600000.0,2.0]],["Llama 2",[1688169600000.0,9.0]],["InternLM-7B",[1688169600000.0,8.0]],["Claude Instant 1.2",[1690848000000.0,2.0]],["Qwen 7B",[1690848000000.0,14.0]],["Mistral 7B",[1693526400000.0,11.0]],["Baichuan2",[1693526400000.0,1.0]],["Claude 2.1",[1698796800000.0,2.0]],["Yi-34B",[1698796800000.0,18.0]],["Mixtral 8x7B",[1701388800000.0,11.0]],["InternLM2-7B",[1704067200000.0,8.0]],["Baichuan3",[1704067200000.0,1.0]],["Gemini 1.5",[1706745600000.0,7.0]],["Claude 3 Haiku",[1709251200000.0,2.0]],["Claude 3 Sonnet",[1709251200000.0,2.15]],["Claude 3 Opus",[1709251200000.0,2.3]],["Llama 3",[1711929600000.0,9.0]],["GPT-4o",[1714521600000.0,6.0]],["Claude 3.5 Sonnet",[1717200000000.0,2.0]],["Qwen2",[1717200000000.0,14.0]],["Llama 3.1",[1719792000000.0,9.0]],["DeepSeek-V2.5",[1725148800000.0,4.0]],["Claude 3.5 Haiku",[1727740800000.0,2.0]],["DeepSeek-V3",[1733011200000.0,4.0]],["Qwen2.5 (Max)",[1735689600000.0,14.0]],["DeepSeek-R1",[1735689600000.0,4.0]],["Claude 3.7 Sonnet",[1738368000000.0,2.0]],["Qwen3",[1743465600000.0,14.0]],["Claude 4 Sonnet",[1746057600000.0,2.0]],["Claude 4 Opus",[1746057600000.0,2.15]],["GPT-5",[1754006400000.0,6.0]],["Claude Opus 4.1",[1754006400000.0,2.0]],["Claude 4.5 Sonnet",[1756684800000.0,2.0]]]}}},"node_renderer":{"type":"object","name":"GlyphRenderer","id":"p1074","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1071","attributes":{"selected":{"type":"object","name":"Selection","id":"p1072","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1073"},"data":{"type":"map","entries":[["release_label",["Jun 2017","Jun 2018","Oct 2018","Jan 2019","Feb 2019","Jun 2019","Jul 2019","Aug 2019","Sep 2019","Oct 2019","Oct 2019","Mar 2020","May 2020","Jan 2021","May 2021","Dec 2021","Dec 2021","Jan 2022","Mar 2022","Apr 2022","May 2022","May 2022","Jul 2022","Dec 2022","Feb 2023","Mar 2023","Mar 2023","Jun 2023","Jul 2023","Jul 2023","Jul 2023","Aug 2023","Aug 2023","Sep 2023","Sep 2023","Nov 2023","Nov 2023","Dec 2023","Jan 2024","Jan 2024","Feb 2024","Mar 2024","Mar 2024","Mar 2024","Apr 2024","May 2024","Jun 2024","Jun 2024","Jul 2024","Sep 2024","Oct 2024","Dec 2024","Jan 2025","Jan 2025","Feb 2025","Apr 2025","May 2025","May 2025","Aug 2025","Aug 2025","Sep 2025"]],["release_month",["1-6-2017","1-6-2018","1-10-2018","1-1-2019","1-2-2019","1-6-2019","1-7-2019","1-8-2019","1-9-2019","1-10-2019","1-10-2019","1-3-2020","1-5-2020","1-1-2021","1-5-2021","1-12-2021","1-12-2021","1-1-2022","1-3-2022","1-4-2022","1-5-2022","1-5-2022","1-7-2022","1-12-2022","1-2-2023","1-3-2023","1-3-2023","1-6-2023","1-7-2023","1-7-2023","1-7-2023","1-8-2023","1-8-2023","1-9-2023","1-9-2023","1-11-2023","1-11-2023","1-12-2023","1-1-2024","1-1-2024","1-2-2024","1-3-2024","1-3-2024","1-3-2024","1-4-2024","1-5-2024","1-6-2024","1-6-2024","1-7-2024","1-9-2024","1-10-2024","1-12-2024","1-1-2025","1-1-2025","1-2-2025","1-4-2025","1-5-2025","1-5-2025","1-8-2025","1-8-2025","1-9-2025"]],["release_date",[1496275200000.0,1527811200000.0,1538352000000.0,1546300800000.0,1548979200000.0,1559347200000.0,1561939200000.0,1564617600000.0,1567296000000.0,1569888000000.0,1569888000000.0,1583020800000.0,1588291200000.0,1609459200000.0,1619827200000.0,1638316800000.0,1638316800000.0,1640995200000.0,1646092800000.0,1648771200000.0,1651363200000.0,1651363200000.0,1656633600000.0,1669852800000.0,1675209600000.0,1677628800000.0,1677628800000.0,1685577600000.0,1688169600000.0,1688169600000.0,1688169600000.0,1690848000000.0,1690848000000.0,1693526400000.0,1693526400000.0,1698796800000.0,1698796800000.0,1701388800000.0,1704067200000.0,1704067200000.0,1706745600000.0,1709251200000.0,1709251200000.0,1709251200000.0,1711929600000.0,1714521600000.0,1717200000000.0,1717200000000.0,1719792000000.0,1725148800000.0,1727740800000.0,1733011200000.0,1735689600000.0,1735689600000.0,1738368000000.0,1743465600000.0,1746057600000.0,1746057600000.0,1754006400000.0,1754006400000.0,1756684800000.0]],["influences",[[],["Attention Is All You Need"],["Attention Is All You Need"],["Attention Is All You Need"],["GPT-1"],["Transformer-XL","BERT"],["BERT"],["GPT-2"],["BERT"],["Attention Is All You Need"],["Attention Is All You Need"],["BERT"],["GPT-2"],["T5"],["Attention Is All You Need"],["Attention Is All You Need"],["Switch Transformer"],["GPT-3"],["Gopher"],["LaMDA"],["T5"],["GPT-3"],["GPT-3","Megatron-LM"],["InstructGPT"],["Chinchilla"],["Chinchilla","GPT-3"],["Constitutional AI"],["LLaMA"],["Claude 1"],["LLaMA"],["LLaMA"],["Claude 1"],["Chinchilla","LLaMA"],["Chinchilla","LLaMA"],["Baichuan-7B"],["Claude 2"],["Llama 2"],["Mistral 7B"],["InternLM-7B"],["Baichuan2"],["PaLM"],["Claude 2.1"],["Claude 2.1"],["Claude 2.1"],["Llama 2"],["GPT-4"],["Claude 3 Sonnet"],["Qwen 7B"],["Llama 3"],["LLaMA"],["Claude 3 Haiku"],["DeepSeek-V2.5"],["Qwen2"],["DeepSeek-V3"],["Claude 3.5 Sonnet"],["Qwen2.5 (Max)"],["Claude 3.7 Sonnet"],["Claude 3 Opus"],["GPT-4o"],["Claude 4 Opus"],["Claude 4 Sonnet"]]],["innovation",["Introduced the Transformer architecture with multi-head self-attention and positional encoding","Applied decoder-only Transformer with generative pretraining on BooksCorpus","Bidirectional encoder pretraining with masked language modelling and next sentence prediction","Segment-level recurrence and relative positional encoding for long-context modelling","Scaled decoder-only models with zero-shot transfer via WebText","Permuted language modelling objective blending autoregressive and autoencoding pretraining","Optimised masked language modelling with longer training, dynamic masking, and larger batches","Model parallelism for trillion-parameter scale using tensor and pipeline parallelism","Parameter sharing and factorised embeddings for lightweight bidirectional transformers","Denoising autoencoder that bridges encoder-decoder pretraining for text generation","Text-to-Text framework with unified transfer learning and span-corruption objective","Replaced masked language modelling with discriminator that detects replaced tokens","175B parameter scaling with in-context learning across diverse tasks","Sparse mixture-of-experts routing enabling trillion-parameter efficiency","Dialogue-optimised training with safety fine-tuning and grounded responses","Scaling laws with retrieval-style evaluation and precision study for large transformers","Hierarchical mixture-of-experts with token-level routing across 1.2T parameters","Reinforcement learning from human feedback tailored to instruction following","Data/parameter scaling law balancing showing benefits of more tokens over parameters","Pathways system with parallelism and chain-of-thought prompting across 540B parameters","Mixture-of-denoisers objective supporting multiple corruption schemes for unified learning","Reproducible GPT-3 class model with fully documented training pipeline","Multilingual open-access 176B parameter model trained collaboratively via Megatron-DeepSpeed","Self-critiquing alignment loop guided by explicit normative principles","Efficient scaling via smaller datasets, grouped-query attention, and open research weights","Large multimodal alignment with reinforced fine-tuning and tool integration","Applied constitutional AI feedback to align helpful and harmless behaviour","Chinese-English bilingual adaptation of LLaMA with extended vocabulary","Expanded context and constitutional alignment refinements with tool use","Open-weight release with supervised fine-tuning and RLHF safety tuning","Toolkit-oriented Chinese open model with multi-stage pretraining and alignment","Latency-optimised Claude variant retaining constitutional safety guarantees","Chinese-English foundation with rotary embeddings and fine-grained tokeniser","Sliding window attention and grouped-query attention for efficient small models","Improved bilingual data curation with extended context and tool APIs","Higher factual reliability and longer context for enterprise tasks","Balanced bilingual dataset with progressive context extension","Sparse mixture-of-experts combining eight Mistral experts with router training","Iterative distillation with modular tool-using skills and expanded context","Domain-adaptive pretraining with knowledge-augmented decoding","Mixture-of-experts multimodal model with million-token context","Fast multimodal assistant with revised constitutional tuning","Mid-tier multimodal reasoning with tool orchestration","Flagship Claude with state-of-the-art reasoning and coding alignment","Token-efficient vocabulary and speculatively decoded training mix","Unified multimodal end-to-end model with real-time streaming latency","Improved tool-use reliability and creative reasoning","Data mixture refresh with extended context and reasoning tuning","Multi-token prediction and improved tool-calling APIs","Sparse mixture-of-experts with hybrid reinforcement learning","Faster multimodal responses with improved grounding","Unified MoE and dense experts with reinforcement fine-tuning","Expanded multilingual coverage with large context generalisation","Reinforced reasoning with reward models targeting mathematical proofs","Long-context orchestration and improved agentic behaviours","Mixture-of-experts scaling with automated reasoning curriculum","Structured tool-use planning with autonomous memory","Frontier reasoning with multi-agent constitutional guidance","Next-generation multimodal orchestration with autonomous tool chains","Iterative self-improvement through agentic evaluation loops","Hybrid symbolic-neural planning with compressed memory"]],["family",["Root","GPT","Encoder-only","Long-context","GPT","Encoder-only","Encoder-only","Scaling","Encoder-only","Seq2Seq","Seq2Seq","Encoder-only","GPT","Mixture-of-Experts","Google","DeepMind/Scaling","Mixture-of-Experts","Alignment","DeepMind/Scaling","Google","Seq2Seq","Open-Source GPT","Open-Source GPT","Alignment","LLaMA","GPT","Claude","Baichuan","Claude","LLaMA","InternLM","Claude","Qwen","Mistral","Baichuan","Claude","Yi","Mistral","InternLM","Baichuan","Google","Claude","Claude","Claude","LLaMA","GPT","Claude","Qwen","LLaMA","DeepSeek","Claude","DeepSeek","Qwen","DeepSeek","Claude","Qwen","Claude","Claude","GPT","Claude","Claude"]],["name",["Attention Is All You Need","GPT-1","BERT","Transformer-XL","GPT-2","XLNet","RoBERTa","Megatron-LM","ALBERT","BART","T5","ELECTRA","GPT-3","Switch Transformer","LaMDA","Gopher","GLaM","InstructGPT","Chinchilla","PaLM","UL2","OPT","BLOOM","Constitutional AI","LLaMA","GPT-4","Claude 1","Baichuan-7B","Claude 2","Llama 2","InternLM-7B","Claude Instant 1.2","Qwen 7B","Mistral 7B","Baichuan2","Claude 2.1","Yi-34B","Mixtral 8x7B","InternLM2-7B","Baichuan3","Gemini 1.5","Claude 3 Haiku","Claude 3 Sonnet","Claude 3 Opus","Llama 3","GPT-4o","Claude 3.5 Sonnet","Qwen2","Llama 3.1","DeepSeek-V2.5","Claude 3.5 Haiku","DeepSeek-V3","Qwen2.5 (Max)","DeepSeek-R1","Claude 3.7 Sonnet","Qwen3","Claude 4 Sonnet","Claude 4 Opus","GPT-5","Claude Opus 4.1","Claude 4.5 Sonnet"]],["index",["Attention Is All You Need","GPT-1","BERT","Transformer-XL","GPT-2","XLNet","RoBERTa","Megatron-LM","ALBERT","BART","T5","ELECTRA","GPT-3","Switch Transformer","LaMDA","Gopher","GLaM","InstructGPT","Chinchilla","PaLM","UL2","OPT","BLOOM","Constitutional AI","LLaMA","GPT-4","Claude 1","Baichuan-7B","Claude 2","Llama 2","InternLM-7B","Claude Instant 1.2","Qwen 7B","Mistral 7B","Baichuan2","Claude 2.1","Yi-34B","Mixtral 8x7B","InternLM2-7B","Baichuan3","Gemini 1.5","Claude 3 Haiku","Claude 3 Sonnet","Claude 3 Opus","Llama 3","GPT-4o","Claude 3.5 Sonnet","Qwen2","Llama 3.1","DeepSeek-V2.5","Claude 3.5 Haiku","DeepSeek-V3","Qwen2.5 (Max)","DeepSeek-R1","Claude 3.7 Sonnet","Qwen3","Claude 4 Sonnet","Claude 4 Opus","GPT-5","Claude Opus 4.1","Claude 4.5 Sonnet"]],["release",["Jun 2017","Jun 2018","Oct 2018","Jan 2019","Feb 2019","Jun 2019","Jul 2019","Aug 2019","Sep 2019","Oct 2019","Oct 2019","Mar 2020","May 2020","Jan 2021","May 2021","Dec 2021","Dec 2021","Jan 2022","Mar 2022","Apr 2022","May 2022","May 2022","Jul 2022","Dec 2022","Feb 2023","Mar 2023","Mar 2023","Jun 2023","Jul 2023","Jul 2023","Jul 2023","Aug 2023","Aug 2023","Sep 2023","Sep 2023","Nov 2023","Nov 2023","Dec 2023","Jan 2024","Jan 2024","Feb 2024","Mar 2024","Mar 2024","Mar 2024","Apr 2024","May 2024","Jun 2024","Jun 2024","Jul 2024","Sep 2024","Oct 2024","Dec 2024","Jan 2025","Jan 2025","Feb 2025","Apr 2025","May 2025","May 2025","Aug 2025","Aug 2025","Sep 2025"]],["color",["#c7c7c7","#d62728","#98df8a","#8c564b","#d62728","#98df8a","#98df8a","#bcbd22","#98df8a","#dbdb8d","#dbdb8d","#98df8a","#d62728","#e377c2","#ff9896","#ffbb78","#e377c2","#1f77b4","#ffbb78","#ff9896","#dbdb8d","#f7b6d2","#f7b6d2","#1f77b4","#c5b0d5","#d62728","#ff7f0e","#aec7e8","#ff7f0e","#c5b0d5","#9467bd","#ff7f0e","#7f7f7f","#c49c94","#aec7e8","#ff7f0e","#17becf","#c49c94","#9467bd","#aec7e8","#ff9896","#ff7f0e","#ff7f0e","#ff7f0e","#c5b0d5","#d62728","#ff7f0e","#7f7f7f","#c5b0d5","#2ca02c","#ff7f0e","#2ca02c","#7f7f7f","#2ca02c","#ff7f0e","#7f7f7f","#ff7f0e","#ff7f0e","#d62728","#ff7f0e","#ff7f0e"]]]}}},"view":{"type":"object","name":"CDSView","id":"p1075","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1076"}}},"glyph":{"type":"object","name":"Scatter","id":"p1070","attributes":{"size":{"type":"value","value":18},"line_color":{"type":"value","value":"#222222"},"fill_color":{"type":"field","field":"color"}}}}},"edge_renderer":{"type":"object","name":"GlyphRenderer","id":"p1081","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1078","attributes":{"selected":{"type":"object","name":"Selection","id":"p1079","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1080"},"data":{"type":"map","entries":[["innovation",["Applied decoder-only Transformer with generative pretraining on BooksCorpus","Bidirectional encoder pretraining with masked language modelling and next sentence prediction","Segment-level recurrence and relative positional encoding for long-context modelling","Denoising autoencoder that bridges encoder-decoder pretraining for text generation","Text-to-Text framework with unified transfer learning and span-corruption objective","Dialogue-optimised training with safety fine-tuning and grounded responses","Scaling laws with retrieval-style evaluation and precision study for large transformers","Scaled decoder-only models with zero-shot transfer via WebText","Permuted language modelling objective blending autoregressive and autoencoding pretraining","Optimised masked language modelling with longer training, dynamic masking, and larger batches","Parameter sharing and factorised embeddings for lightweight bidirectional transformers","Replaced masked language modelling with discriminator that detects replaced tokens","Permuted language modelling objective blending autoregressive and autoencoding pretraining","Model parallelism for trillion-parameter scale using tensor and pipeline parallelism","175B parameter scaling with in-context learning across diverse tasks","Multilingual open-access 176B parameter model trained collaboratively via Megatron-DeepSpeed","Sparse mixture-of-experts routing enabling trillion-parameter efficiency","Mixture-of-denoisers objective supporting multiple corruption schemes for unified learning","Reinforcement learning from human feedback tailored to instruction following","Reproducible GPT-3 class model with fully documented training pipeline","Multilingual open-access 176B parameter model trained collaboratively via Megatron-DeepSpeed","Large multimodal alignment with reinforced fine-tuning and tool integration","Hierarchical mixture-of-experts with token-level routing across 1.2T parameters","Pathways system with parallelism and chain-of-thought prompting across 540B parameters","Data/parameter scaling law balancing showing benefits of more tokens over parameters","Self-critiquing alignment loop guided by explicit normative principles","Efficient scaling via smaller datasets, grouped-query attention, and open research weights","Large multimodal alignment with reinforced fine-tuning and tool integration","Chinese-English foundation with rotary embeddings and fine-grained tokeniser","Sliding window attention and grouped-query attention for efficient small models","Mixture-of-experts multimodal model with million-token context","Applied constitutional AI feedback to align helpful and harmless behaviour","Chinese-English bilingual adaptation of LLaMA with extended vocabulary","Open-weight release with supervised fine-tuning and RLHF safety tuning","Toolkit-oriented Chinese open model with multi-stage pretraining and alignment","Chinese-English foundation with rotary embeddings and fine-grained tokeniser","Sliding window attention and grouped-query attention for efficient small models","Sparse mixture-of-experts with hybrid reinforcement learning","Unified multimodal end-to-end model with real-time streaming latency","Expanded context and constitutional alignment refinements with tool use","Latency-optimised Claude variant retaining constitutional safety guarantees","Improved bilingual data curation with extended context and tool APIs","Higher factual reliability and longer context for enterprise tasks","Balanced bilingual dataset with progressive context extension","Token-efficient vocabulary and speculatively decoded training mix","Iterative distillation with modular tool-using skills and expanded context","Data mixture refresh with extended context and reasoning tuning","Sparse mixture-of-experts combining eight Mistral experts with router training","Domain-adaptive pretraining with knowledge-augmented decoding","Fast multimodal assistant with revised constitutional tuning","Mid-tier multimodal reasoning with tool orchestration","Flagship Claude with state-of-the-art reasoning and coding alignment","Faster multimodal responses with improved grounding","Improved tool-use reliability and creative reasoning","Frontier reasoning with multi-agent constitutional guidance","Multi-token prediction and improved tool-calling APIs","Next-generation multimodal orchestration with autonomous tool chains","Long-context orchestration and improved agentic behaviours","Expanded multilingual coverage with large context generalisation","Unified MoE and dense experts with reinforcement fine-tuning","Reinforced reasoning with reward models targeting mathematical proofs","Mixture-of-experts scaling with automated reasoning curriculum","Structured tool-use planning with autonomous memory","Hybrid symbolic-neural planning with compressed memory","Iterative self-improvement through agentic evaluation loops"]],["start",["Attention Is All You Need","Attention Is All You Need","Attention Is All You Need","Attention Is All You Need","Attention Is All You Need","Attention Is All You Need","Attention Is All You Need","GPT-1","BERT","BERT","BERT","BERT","Transformer-XL","GPT-2","GPT-2","Megatron-LM","T5","T5","GPT-3","GPT-3","GPT-3","GPT-3","Switch Transformer","LaMDA","Gopher","InstructGPT","Chinchilla","Chinchilla","Chinchilla","Chinchilla","PaLM","Constitutional AI","LLaMA","LLaMA","LLaMA","LLaMA","LLaMA","LLaMA","GPT-4","Claude 1","Claude 1","Baichuan-7B","Claude 2","Llama 2","Llama 2","InternLM-7B","Qwen 7B","Mistral 7B","Baichuan2","Claude 2.1","Claude 2.1","Claude 2.1","Claude 3 Haiku","Claude 3 Sonnet","Claude 3 Opus","Llama 3","GPT-4o","Claude 3.5 Sonnet","Qwen2","DeepSeek-V2.5","DeepSeek-V3","Qwen2.5 (Max)","Claude 3.7 Sonnet","Claude 4 Sonnet","Claude 4 Opus"]],["end",["GPT-1","BERT","Transformer-XL","BART","T5","LaMDA","Gopher","GPT-2","XLNet","RoBERTa","ALBERT","ELECTRA","XLNet","Megatron-LM","GPT-3","BLOOM","Switch Transformer","UL2","InstructGPT","OPT","BLOOM","GPT-4","GLaM","PaLM","Chinchilla","Constitutional AI","LLaMA","GPT-4","Qwen 7B","Mistral 7B","Gemini 1.5","Claude 1","Baichuan-7B","Llama 2","InternLM-7B","Qwen 7B","Mistral 7B","DeepSeek-V2.5","GPT-4o","Claude 2","Claude Instant 1.2","Baichuan2","Claude 2.1","Yi-34B","Llama 3","InternLM2-7B","Qwen2","Mixtral 8x7B","Baichuan3","Claude 3 Haiku","Claude 3 Sonnet","Claude 3 Opus","Claude 3.5 Haiku","Claude 3.5 Sonnet","Claude 4 Opus","Llama 3.1","GPT-5","Claude 3.7 Sonnet","Qwen2.5 (Max)","DeepSeek-V3","DeepSeek-R1","Qwen3","Claude 4 Sonnet","Claude 4.5 Sonnet","Claude Opus 4.1"]],["release",["Jun 2018","Oct 2018","Jan 2019","Oct 2019","Oct 2019","May 2021","Dec 2021","Feb 2019","Jun 2019","Jul 2019","Sep 2019","Mar 2020","Jun 2019","Aug 2019","May 2020","Jul 2022","Jan 2021","May 2022","Jan 2022","May 2022","Jul 2022","Mar 2023","Dec 2021","Apr 2022","Mar 2022","Dec 2022","Feb 2023","Mar 2023","Aug 2023","Sep 2023","Feb 2024","Mar 2023","Jun 2023","Jul 2023","Jul 2023","Aug 2023","Sep 2023","Sep 2024","May 2024","Jul 2023","Aug 2023","Sep 2023","Nov 2023","Nov 2023","Apr 2024","Jan 2024","Jun 2024","Dec 2023","Jan 2024","Mar 2024","Mar 2024","Mar 2024","Oct 2024","Jun 2024","May 2025","Jul 2024","Aug 2025","Feb 2025","Jan 2025","Dec 2024","Jan 2025","Apr 2025","May 2025","Sep 2025","Aug 2025"]]]}}},"view":{"type":"object","name":"CDSView","id":"p1082","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1083"}}},"glyph":{"type":"object","name":"MultiLine","id":"p1077","attributes":{"line_alpha":{"type":"value","value":0.4},"line_width":{"type":"value","value":2}}}}},"selection_policy":{"type":"object","name":"NodesOnly","id":"p1084"},"inspection_policy":{"type":"object","name":"NodesOnly","id":"p1085"}}},{"type":"object","name":"GlyphRenderer","id":"p1097","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1091","attributes":{"selected":{"type":"object","name":"Selection","id":"p1092","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1093"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1098","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1099"}}},"glyph":{"type":"object","name":"Scatter","id":"p1094","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#1f77b4"},"fill_color":{"type":"value","value":"#1f77b4"},"hatch_color":{"type":"value","value":"#1f77b4"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1095","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#1f77b4"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#1f77b4"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#1f77b4"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1096","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#1f77b4"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#1f77b4"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#1f77b4"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1108","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1102","attributes":{"selected":{"type":"object","name":"Selection","id":"p1103","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1104"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1109","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1110"}}},"glyph":{"type":"object","name":"Scatter","id":"p1105","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#aec7e8"},"fill_color":{"type":"value","value":"#aec7e8"},"hatch_color":{"type":"value","value":"#aec7e8"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1106","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#aec7e8"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#aec7e8"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#aec7e8"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1107","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#aec7e8"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#aec7e8"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#aec7e8"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1118","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1112","attributes":{"selected":{"type":"object","name":"Selection","id":"p1113","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1114"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1119","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1120"}}},"glyph":{"type":"object","name":"Scatter","id":"p1115","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#ff7f0e"},"fill_color":{"type":"value","value":"#ff7f0e"},"hatch_color":{"type":"value","value":"#ff7f0e"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1116","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#ff7f0e"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#ff7f0e"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#ff7f0e"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1117","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#ff7f0e"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#ff7f0e"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#ff7f0e"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1128","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1122","attributes":{"selected":{"type":"object","name":"Selection","id":"p1123","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1124"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1129","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1130"}}},"glyph":{"type":"object","name":"Scatter","id":"p1125","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#ffbb78"},"fill_color":{"type":"value","value":"#ffbb78"},"hatch_color":{"type":"value","value":"#ffbb78"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1126","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#ffbb78"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#ffbb78"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#ffbb78"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1127","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#ffbb78"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#ffbb78"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#ffbb78"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1138","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1132","attributes":{"selected":{"type":"object","name":"Selection","id":"p1133","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1134"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1139","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1140"}}},"glyph":{"type":"object","name":"Scatter","id":"p1135","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#2ca02c"},"fill_color":{"type":"value","value":"#2ca02c"},"hatch_color":{"type":"value","value":"#2ca02c"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1136","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#2ca02c"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#2ca02c"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#2ca02c"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1137","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#2ca02c"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#2ca02c"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#2ca02c"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1148","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1142","attributes":{"selected":{"type":"object","name":"Selection","id":"p1143","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1144"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1149","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1150"}}},"glyph":{"type":"object","name":"Scatter","id":"p1145","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#98df8a"},"fill_color":{"type":"value","value":"#98df8a"},"hatch_color":{"type":"value","value":"#98df8a"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1146","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#98df8a"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#98df8a"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#98df8a"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1147","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#98df8a"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#98df8a"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#98df8a"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1158","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1152","attributes":{"selected":{"type":"object","name":"Selection","id":"p1153","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1154"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1159","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1160"}}},"glyph":{"type":"object","name":"Scatter","id":"p1155","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#d62728"},"fill_color":{"type":"value","value":"#d62728"},"hatch_color":{"type":"value","value":"#d62728"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1156","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#d62728"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#d62728"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#d62728"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1157","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#d62728"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#d62728"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#d62728"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1168","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1162","attributes":{"selected":{"type":"object","name":"Selection","id":"p1163","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1164"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1169","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1170"}}},"glyph":{"type":"object","name":"Scatter","id":"p1165","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#ff9896"},"fill_color":{"type":"value","value":"#ff9896"},"hatch_color":{"type":"value","value":"#ff9896"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1166","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#ff9896"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#ff9896"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#ff9896"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1167","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#ff9896"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#ff9896"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#ff9896"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1178","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1172","attributes":{"selected":{"type":"object","name":"Selection","id":"p1173","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1174"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1179","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1180"}}},"glyph":{"type":"object","name":"Scatter","id":"p1175","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#9467bd"},"fill_color":{"type":"value","value":"#9467bd"},"hatch_color":{"type":"value","value":"#9467bd"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1176","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#9467bd"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#9467bd"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#9467bd"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1177","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#9467bd"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#9467bd"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#9467bd"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1188","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1182","attributes":{"selected":{"type":"object","name":"Selection","id":"p1183","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1184"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1189","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1190"}}},"glyph":{"type":"object","name":"Scatter","id":"p1185","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#c5b0d5"},"fill_color":{"type":"value","value":"#c5b0d5"},"hatch_color":{"type":"value","value":"#c5b0d5"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1186","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#c5b0d5"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#c5b0d5"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#c5b0d5"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1187","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#c5b0d5"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#c5b0d5"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#c5b0d5"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1198","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1192","attributes":{"selected":{"type":"object","name":"Selection","id":"p1193","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1194"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1199","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1200"}}},"glyph":{"type":"object","name":"Scatter","id":"p1195","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#8c564b"},"fill_color":{"type":"value","value":"#8c564b"},"hatch_color":{"type":"value","value":"#8c564b"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1196","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#8c564b"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#8c564b"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#8c564b"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1197","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#8c564b"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#8c564b"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#8c564b"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1208","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1202","attributes":{"selected":{"type":"object","name":"Selection","id":"p1203","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1204"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1209","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1210"}}},"glyph":{"type":"object","name":"Scatter","id":"p1205","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#c49c94"},"fill_color":{"type":"value","value":"#c49c94"},"hatch_color":{"type":"value","value":"#c49c94"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1206","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#c49c94"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#c49c94"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#c49c94"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1207","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#c49c94"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#c49c94"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#c49c94"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1218","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1212","attributes":{"selected":{"type":"object","name":"Selection","id":"p1213","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1214"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1219","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1220"}}},"glyph":{"type":"object","name":"Scatter","id":"p1215","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#e377c2"},"fill_color":{"type":"value","value":"#e377c2"},"hatch_color":{"type":"value","value":"#e377c2"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1216","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#e377c2"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#e377c2"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#e377c2"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1217","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#e377c2"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#e377c2"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#e377c2"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1228","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1222","attributes":{"selected":{"type":"object","name":"Selection","id":"p1223","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1224"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1229","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1230"}}},"glyph":{"type":"object","name":"Scatter","id":"p1225","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#f7b6d2"},"fill_color":{"type":"value","value":"#f7b6d2"},"hatch_color":{"type":"value","value":"#f7b6d2"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1226","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#f7b6d2"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#f7b6d2"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#f7b6d2"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1227","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#f7b6d2"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#f7b6d2"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#f7b6d2"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1238","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1232","attributes":{"selected":{"type":"object","name":"Selection","id":"p1233","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1234"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1239","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1240"}}},"glyph":{"type":"object","name":"Scatter","id":"p1235","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#7f7f7f"},"fill_color":{"type":"value","value":"#7f7f7f"},"hatch_color":{"type":"value","value":"#7f7f7f"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1236","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#7f7f7f"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#7f7f7f"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#7f7f7f"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1237","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#7f7f7f"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#7f7f7f"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#7f7f7f"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1248","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1242","attributes":{"selected":{"type":"object","name":"Selection","id":"p1243","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1244"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1249","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1250"}}},"glyph":{"type":"object","name":"Scatter","id":"p1245","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#c7c7c7"},"fill_color":{"type":"value","value":"#c7c7c7"},"hatch_color":{"type":"value","value":"#c7c7c7"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1246","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#c7c7c7"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#c7c7c7"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#c7c7c7"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1247","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#c7c7c7"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#c7c7c7"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#c7c7c7"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1258","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1252","attributes":{"selected":{"type":"object","name":"Selection","id":"p1253","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1254"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1259","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1260"}}},"glyph":{"type":"object","name":"Scatter","id":"p1255","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#bcbd22"},"fill_color":{"type":"value","value":"#bcbd22"},"hatch_color":{"type":"value","value":"#bcbd22"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1256","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#bcbd22"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#bcbd22"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#bcbd22"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1257","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#bcbd22"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#bcbd22"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#bcbd22"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1268","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1262","attributes":{"selected":{"type":"object","name":"Selection","id":"p1263","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1264"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1269","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1270"}}},"glyph":{"type":"object","name":"Scatter","id":"p1265","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#dbdb8d"},"fill_color":{"type":"value","value":"#dbdb8d"},"hatch_color":{"type":"value","value":"#dbdb8d"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1266","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#dbdb8d"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#dbdb8d"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#dbdb8d"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1267","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#dbdb8d"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#dbdb8d"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#dbdb8d"},"hatch_alpha":{"type":"value","value":0.2}}}}},{"type":"object","name":"GlyphRenderer","id":"p1278","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1272","attributes":{"selected":{"type":"object","name":"Selection","id":"p1273","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1274"},"data":{"type":"map","entries":[["x",[]],["y",[]]]}}},"view":{"type":"object","name":"CDSView","id":"p1279","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1280"}}},"glyph":{"type":"object","name":"Scatter","id":"p1275","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#17becf"},"fill_color":{"type":"value","value":"#17becf"},"hatch_color":{"type":"value","value":"#17becf"}}},"nonselection_glyph":{"type":"object","name":"Scatter","id":"p1276","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#17becf"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#17becf"},"fill_alpha":{"type":"value","value":0.1},"hatch_color":{"type":"value","value":"#17becf"},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"Scatter","id":"p1277","attributes":{"x":{"type":"field","field":"x"},"y":{"type":"field","field":"y"},"size":{"type":"value","value":12},"line_color":{"type":"value","value":"#17becf"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#17becf"},"fill_alpha":{"type":"value","value":0.2},"hatch_color":{"type":"value","value":"#17becf"},"hatch_alpha":{"type":"value","value":0.2}}}}}],"toolbar":{"type":"object","name":"Toolbar","id":"p1015","attributes":{"tools":[{"type":"object","name":"PanTool","id":"p1044"},{"type":"object","name":"WheelZoomTool","id":"p1045","attributes":{"renderers":"auto"}},{"type":"object","name":"BoxZoomTool","id":"p1046","attributes":{"dimensions":"both","overlay":{"type":"object","name":"BoxAnnotation","id":"p1047","attributes":{"syncable":false,"line_color":"black","line_alpha":1.0,"line_width":2,"line_dash":[4,4],"fill_color":"lightgrey","fill_alpha":0.5,"level":"overlay","visible":false,"left":{"type":"number","value":"nan"},"right":{"type":"number","value":"nan"},"top":{"type":"number","value":"nan"},"bottom":{"type":"number","value":"nan"},"left_units":"canvas","right_units":"canvas","top_units":"canvas","bottom_units":"canvas","handles":{"type":"object","name":"BoxInteractionHandles","id":"p1053","attributes":{"all":{"type":"object","name":"AreaVisuals","id":"p1052","attributes":{"fill_color":"white","hover_fill_color":"lightgray"}}}}}}}},{"type":"object","name":"SaveTool","id":"p1054"},{"type":"object","name":"ResetTool","id":"p1055"},{"type":"object","name":"HelpTool","id":"p1056"},{"type":"object","name":"PanTool","id":"p1057"},{"type":"object","name":"WheelZoomTool","id":"p1058","attributes":{"renderers":"auto"}},{"type":"object","name":"BoxZoomTool","id":"p1059","attributes":{"overlay":{"type":"object","name":"BoxAnnotation","id":"p1060","attributes":{"syncable":false,"line_color":"black","line_alpha":1.0,"line_width":2,"line_dash":[4,4],"fill_color":"lightgrey","fill_alpha":0.5,"level":"overlay","visible":false,"left":{"type":"number","value":"nan"},"right":{"type":"number","value":"nan"},"top":{"type":"number","value":"nan"},"bottom":{"type":"number","value":"nan"},"left_units":"canvas","right_units":"canvas","top_units":"canvas","bottom_units":"canvas","handles":{"type":"object","name":"BoxInteractionHandles","id":"p1066","attributes":{"all":{"type":"object","name":"AreaVisuals","id":"p1065","attributes":{"fill_color":"white","hover_fill_color":"lightgray"}}}}}}}},{"type":"object","name":"ResetTool","id":"p1067"},{"type":"object","name":"TapTool","id":"p1068","attributes":{"renderers":"auto"}},{"type":"object","name":"HoverTool","id":"p1087","attributes":{"renderers":[{"id":"p1074"}],"tooltips":[["Model","@index"],["Family","@family"],["Released","@release"],["Key innovation","@innovation"]],"sort_by":null}},{"type":"object","name":"HoverTool","id":"p1088","attributes":{"renderers":[{"id":"p1081"}],"tooltips":[["Influence","@start \u2192 @end"],["Child release","@release"],["Innovation carried forward","@innovation"]],"sort_by":null}}]}},"toolbar_location":"above","left":[{"type":"object","name":"LinearAxis","id":"p1039","attributes":{"ticker":{"type":"object","name":"FixedTicker","id":"p1089","attributes":{"ticks":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],"minor_ticks":[]}},"formatter":{"type":"object","name":"BasicTickFormatter","id":"p1041"},"axis_label":"Model family","major_label_overrides":{"type":"map","entries":[[0,"Alignment"],[1,"Baichuan"],[2,"Claude"],[3,"DeepMind/Scaling"],[4,"DeepSeek"],[5,"Encoder-only"],[6,"GPT"],[7,"Google"],[8,"InternLM"],[9,"LLaMA"],[10,"Long-context"],[11,"Mistral"],[12,"Mixture-of-Experts"],[13,"Open-Source GPT"],[14,"Qwen"],[15,"Root"],[16,"Scaling"],[17,"Seq2Seq"],[18,"Yi"]]},"major_label_policy":{"type":"object","name":"AllLabels","id":"p1042"}}}],"below":[{"type":"object","name":"DatetimeAxis","id":"p1020","attributes":{"ticker":{"type":"object","name":"DatetimeTicker","id":"p1021","attributes":{"num_minor_ticks":5,"tickers":[{"type":"object","name":"AdaptiveTicker","id":"p1022","attributes":{"num_minor_ticks":0,"mantissas":[1,2,5],"max_interval":500.0}},{"type":"object","name":"AdaptiveTicker","id":"p1023","attributes":{"num_minor_ticks":0,"base":60,"mantissas":[1,2,5,10,15,20,30],"min_interval":1000.0,"max_interval":1800000.0}},{"type":"object","name":"AdaptiveTicker","id":"p1024","attributes":{"num_minor_ticks":0,"base":24,"mantissas":[1,2,4,6,8,12],"min_interval":3600000.0,"max_interval":43200000.0}},{"type":"object","name":"DaysTicker","id":"p1025","attributes":{"days":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]}},{"type":"object","name":"DaysTicker","id":"p1026","attributes":{"days":[1,4,7,10,13,16,19,22,25,28]}},{"type":"object","name":"DaysTicker","id":"p1027","attributes":{"days":[1,8,15,22]}},{"type":"object","name":"DaysTicker","id":"p1028","attributes":{"days":[1,15]}},{"type":"object","name":"MonthsTicker","id":"p1029","attributes":{"months":[0,1,2,3,4,5,6,7,8,9,10,11]}},{"type":"object","name":"MonthsTicker","id":"p1030","attributes":{"months":[0,2,4,6,8,10]}},{"type":"object","name":"MonthsTicker","id":"p1031","attributes":{"months":[0,4,8]}},{"type":"object","name":"MonthsTicker","id":"p1032","attributes":{"months":[0,6]}},{"type":"object","name":"YearsTicker","id":"p1033"}]}},"formatter":{"type":"object","name":"DatetimeTickFormatter","id":"p1036","attributes":{"seconds":"%T","minsec":"%T","minutes":"%H:%M","hours":"%H:%M","days":"%b %d","months":"%b %Y","strip_leading_zeros":["microseconds","milliseconds","seconds"],"boundary_scaling":false,"context":{"type":"object","name":"DatetimeTickFormatter","id":"p1035","attributes":{"microseconds":"%T","milliseconds":"%T","seconds":"%b %d, %Y","minsec":"%b %d, %Y","minutes":"%b %d, %Y","hourmin":"%b %d, %Y","hours":"%b %d, %Y","days":"%Y","months":"","years":"","boundary_scaling":false,"hide_repeats":true,"context":{"type":"object","name":"DatetimeTickFormatter","id":"p1034","attributes":{"microseconds":"%b %d, %Y","milliseconds":"%b %d, %Y","seconds":"","minsec":"","minutes":"","hourmin":"","hours":"","days":"","months":"","years":"","boundary_scaling":false,"hide_repeats":true}},"context_which":"all"}},"context_which":"all"}},"axis_label":"Release timeline","major_label_policy":{"type":"object","name":"AllLabels","id":"p1037"}}}],"center":[{"type":"object","name":"Grid","id":"p1038","attributes":{"axis":{"id":"p1020"}}},{"type":"object","name":"Grid","id":"p1043","attributes":{"dimension":1,"axis":{"id":"p1039"}}},{"type":"object","name":"Label","id":"p1090","attributes":{"text":"Hover nodes or edges to see innovations. Use scroll to zoom.","text_font_size":"10pt","x":0,"y":19.8,"x_units":"screen"}},{"type":"object","name":"Legend","id":"p1100","attributes":{"location":"top_left","click_policy":"mute","items":[{"type":"object","name":"LegendItem","id":"p1101","attributes":{"label":{"type":"value","value":"Alignment"},"renderers":[{"id":"p1097"}]}},{"type":"object","name":"LegendItem","id":"p1111","attributes":{"label":{"type":"value","value":"Baichuan"},"renderers":[{"id":"p1108"}]}},{"type":"object","name":"LegendItem","id":"p1121","attributes":{"label":{"type":"value","value":"Claude"},"renderers":[{"id":"p1118"}]}},{"type":"object","name":"LegendItem","id":"p1131","attributes":{"label":{"type":"value","value":"DeepMind/Scaling"},"renderers":[{"id":"p1128"}]}},{"type":"object","name":"LegendItem","id":"p1141","attributes":{"label":{"type":"value","value":"DeepSeek"},"renderers":[{"id":"p1138"}]}},{"type":"object","name":"LegendItem","id":"p1151","attributes":{"label":{"type":"value","value":"Encoder-only"},"renderers":[{"id":"p1148"}]}},{"type":"object","name":"LegendItem","id":"p1161","attributes":{"label":{"type":"value","value":"GPT"},"renderers":[{"id":"p1158"}]}},{"type":"object","name":"LegendItem","id":"p1171","attributes":{"label":{"type":"value","value":"Google"},"renderers":[{"id":"p1168"}]}},{"type":"object","name":"LegendItem","id":"p1181","attributes":{"label":{"type":"value","value":"InternLM"},"renderers":[{"id":"p1178"}]}},{"type":"object","name":"LegendItem","id":"p1191","attributes":{"label":{"type":"value","value":"LLaMA"},"renderers":[{"id":"p1188"}]}},{"type":"object","name":"LegendItem","id":"p1201","attributes":{"label":{"type":"value","value":"Long-context"},"renderers":[{"id":"p1198"}]}},{"type":"object","name":"LegendItem","id":"p1211","attributes":{"label":{"type":"value","value":"Mistral"},"renderers":[{"id":"p1208"}]}},{"type":"object","name":"LegendItem","id":"p1221","attributes":{"label":{"type":"value","value":"Mixture-of-Experts"},"renderers":[{"id":"p1218"}]}},{"type":"object","name":"LegendItem","id":"p1231","attributes":{"label":{"type":"value","value":"Open-Source GPT"},"renderers":[{"id":"p1228"}]}},{"type":"object","name":"LegendItem","id":"p1241","attributes":{"label":{"type":"value","value":"Qwen"},"renderers":[{"id":"p1238"}]}},{"type":"object","name":"LegendItem","id":"p1251","attributes":{"label":{"type":"value","value":"Root"},"renderers":[{"id":"p1248"}]}},{"type":"object","name":"LegendItem","id":"p1261","attributes":{"label":{"type":"value","value":"Scaling"},"renderers":[{"id":"p1258"}]}},{"type":"object","name":"LegendItem","id":"p1271","attributes":{"label":{"type":"value","value":"Seq2Seq"},"renderers":[{"id":"p1268"}]}},{"type":"object","name":"LegendItem","id":"p1281","attributes":{"label":{"type":"value","value":"Yi"},"renderers":[{"id":"p1278"}]}}]}}]}}]}}
+    <script type="application/json" id="ab64fd4d-fa49-4b78-9784-7a17ae041eba">
+      {"8efd06a3-88f0-4c98-b291-ea93dacfe3c6":{"version":"3.8.0","title":"Bokeh Application","config":{"type":"object","name":"DocumentConfig","id":"p1009","attributes":{"notifications":{"type":"object","name":"Notifications","id":"p1010"}}},"roots":[{"type":"object","name":"ThreeDScatter","id":"p1006","attributes":{"width":1200,"height":800,"data":{"type":"map","entries":[["x",[0.0,365.0,487.0,579.0,610.0,730.0,760.0,791.0,822.0,852.0,852.0,1004.0,1065.0,1310.0,1430.0,1644.0,1644.0,1675.0,1734.0,1765.0,1795.0,1795.0,1856.0,2009.0,2071.0,2099.0,2099.0,2191.0,2221.0,2221.0,2221.0,2252.0,2252.0,2283.0,2283.0,2344.0,2344.0,2374.0,2405.0,2405.0,2436.0,2465.0,2465.0,2465.0,2496.0,2526.0,2557.0,2557.0,2587.0,2649.0,2679.0,2740.0,2771.0,2771.0,2802.0,2861.0,2891.0,2891.0,2983.0,2983.0,3014.0]],["y",[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0,15.0,16.0,17.0,18.0,19.0,20.0,21.0,22.0,23.0,24.0,25.0,26.0,27.0,28.0,29.0,30.0,31.0,32.0,33.0,34.0,35.0,36.0,37.0,38.0,39.0,40.0,41.0,42.0,43.0,44.0,45.0,46.0,47.0,48.0,49.0,50.0,51.0,52.0,53.0,54.0,55.0,56.0,57.0,58.0,59.0,60.0]],["z",[24.0,2.0,4.0,49.0,47.0,42.0,39.0,34.0,40.0,9.0,56.0,45.0,0.0,53.0,10.0,48.0,19.0,44.0,8.0,41.0,31.0,46.0,36.0,50.0,12.0,27.0,1.0,5.0,13.0,38.0,58.0,28.0,6.0,51.0,22.0,20.0,3.0,52.0,25.0,11.0,32.0,15.0,30.0,17.0,57.0,60.0,23.0,7.0,35.0,54.0,16.0,59.0,14.0,43.0,29.0,33.0,55.0,18.0,37.0,26.0,21.0]],["color",["#c7c7c7","#d62728","#98df8a","#8c564b","#d62728","#98df8a","#98df8a","#bcbd22","#98df8a","#dbdb8d","#dbdb8d","#98df8a","#d62728","#e377c2","#ff9896","#ffbb78","#e377c2","#1f77b4","#ffbb78","#ff9896","#dbdb8d","#f7b6d2","#f7b6d2","#1f77b4","#c5b0d5","#d62728","#ff7f0e","#aec7e8","#ff7f0e","#c5b0d5","#9467bd","#ff7f0e","#7f7f7f","#c49c94","#aec7e8","#ff7f0e","#17becf","#c49c94","#9467bd","#aec7e8","#ff9896","#ff7f0e","#ff7f0e","#ff7f0e","#c5b0d5","#d62728","#ff7f0e","#7f7f7f","#c5b0d5","#2ca02c","#ff7f0e","#2ca02c","#7f7f7f","#2ca02c","#ff7f0e","#7f7f7f","#ff7f0e","#ff7f0e","#d62728","#ff7f0e","#ff7f0e"]],["name",["Attention Is All You Need","GPT-1","BERT","Transformer-XL","GPT-2","XLNet","RoBERTa","Megatron-LM","ALBERT","BART","T5","ELECTRA","GPT-3","Switch Transformer","LaMDA","Gopher","GLaM","InstructGPT","Chinchilla","PaLM","UL2","OPT","BLOOM","Constitutional AI","LLaMA","GPT-4","Claude 1","Baichuan-7B","Claude 2","Llama 2","InternLM-7B","Claude Instant 1.2","Qwen 7B","Mistral 7B","Baichuan2","Claude 2.1","Yi-34B","Mixtral 8x7B","InternLM2-7B","Baichuan3","Gemini 1.5","Claude 3 Haiku","Claude 3 Sonnet","Claude 3 Opus","Llama 3","GPT-4o","Claude 3.5 Sonnet","Qwen2","Llama 3.1","DeepSeek-V2.5","Claude 3.5 Haiku","DeepSeek-V3","Qwen2.5 (Max)","DeepSeek-R1","Claude 3.7 Sonnet","Qwen3","Claude 4 Sonnet","Claude 4 Opus","GPT-5","Claude Opus 4.1","Claude 4.5 Sonnet"]],["family",["Root","GPT","Encoder-only","Long-context","GPT","Encoder-only","Encoder-only","Scaling","Encoder-only","Seq2Seq","Seq2Seq","Encoder-only","GPT","Mixture-of-Experts","Google","DeepMind/Scaling","Mixture-of-Experts","Alignment","DeepMind/Scaling","Google","Seq2Seq","Open-Source GPT","Open-Source GPT","Alignment","LLaMA","GPT","Claude","Baichuan","Claude","LLaMA","InternLM","Claude","Qwen","Mistral","Baichuan","Claude","Yi","Mistral","InternLM","Baichuan","Google","Claude","Claude","Claude","LLaMA","GPT","Claude","Qwen","LLaMA","DeepSeek","Claude","DeepSeek","Qwen","DeepSeek","Claude","Qwen","Claude","Claude","GPT","Claude","Claude"]],["release",["Jun 2017","Jun 2018","Oct 2018","Jan 2019","Feb 2019","Jun 2019","Jul 2019","Aug 2019","Sep 2019","Oct 2019","Oct 2019","Mar 2020","May 2020","Jan 2021","May 2021","Dec 2021","Dec 2021","Jan 2022","Mar 2022","Apr 2022","May 2022","May 2022","Jul 2022","Dec 2022","Feb 2023","Mar 2023","Mar 2023","Jun 2023","Jul 2023","Jul 2023","Jul 2023","Aug 2023","Aug 2023","Sep 2023","Sep 2023","Nov 2023","Nov 2023","Dec 2023","Jan 2024","Jan 2024","Feb 2024","Mar 2024","Mar 2024","Mar 2024","Apr 2024","May 2024","Jun 2024","Jun 2024","Jul 2024","Sep 2024","Oct 2024","Dec 2024","Jan 2025","Jan 2025","Feb 2025","Apr 2025","May 2025","May 2025","Aug 2025","Aug 2025","Sep 2025"]],["innovation",["Introduced the Transformer architecture with multi-head self-attention and positional encoding","Applied decoder-only Transformer with generative pretraining on BooksCorpus","Bidirectional encoder pretraining with masked language modelling and next sentence prediction","Segment-level recurrence and relative positional encoding for long-context modelling","Scaled decoder-only models with zero-shot transfer via WebText","Permuted language modelling objective blending autoregressive and autoencoding pretraining","Optimised masked language modelling with longer training, dynamic masking, and larger batches","Model parallelism for trillion-parameter scale using tensor and pipeline parallelism","Parameter sharing and factorised embeddings for lightweight bidirectional transformers","Denoising autoencoder that bridges encoder-decoder pretraining for text generation","Text-to-Text framework with unified transfer learning and span-corruption objective","Replaced masked language modelling with discriminator that detects replaced tokens","175B parameter scaling with in-context learning across diverse tasks","Sparse mixture-of-experts routing enabling trillion-parameter efficiency","Dialogue-optimised training with safety fine-tuning and grounded responses","Scaling laws with retrieval-style evaluation and precision study for large transformers","Hierarchical mixture-of-experts with token-level routing across 1.2T parameters","Reinforcement learning from human feedback tailored to instruction following","Data/parameter scaling law balancing showing benefits of more tokens over parameters","Pathways system with parallelism and chain-of-thought prompting across 540B parameters","Mixture-of-denoisers objective supporting multiple corruption schemes for unified learning","Reproducible GPT-3 class model with fully documented training pipeline","Multilingual open-access 176B parameter model trained collaboratively via Megatron-DeepSpeed","Self-critiquing alignment loop guided by explicit normative principles","Efficient scaling via smaller datasets, grouped-query attention, and open research weights","Large multimodal alignment with reinforced fine-tuning and tool integration","Applied constitutional AI feedback to align helpful and harmless behaviour","Chinese-English bilingual adaptation of LLaMA with extended vocabulary","Expanded context and constitutional alignment refinements with tool use","Open-weight release with supervised fine-tuning and RLHF safety tuning","Toolkit-oriented Chinese open model with multi-stage pretraining and alignment","Latency-optimised Claude variant retaining constitutional safety guarantees","Chinese-English foundation with rotary embeddings and fine-grained tokeniser","Sliding window attention and grouped-query attention for efficient small models","Improved bilingual data curation with extended context and tool APIs","Higher factual reliability and longer context for enterprise tasks","Balanced bilingual dataset with progressive context extension","Sparse mixture-of-experts combining eight Mistral experts with router training","Iterative distillation with modular tool-using skills and expanded context","Domain-adaptive pretraining with knowledge-augmented decoding","Mixture-of-experts multimodal model with million-token context","Fast multimodal assistant with revised constitutional tuning","Mid-tier multimodal reasoning with tool orchestration","Flagship Claude with state-of-the-art reasoning and coding alignment","Token-efficient vocabulary and speculatively decoded training mix","Unified multimodal end-to-end model with real-time streaming latency","Improved tool-use reliability and creative reasoning","Data mixture refresh with extended context and reasoning tuning","Multi-token prediction and improved tool-calling APIs","Sparse mixture-of-experts with hybrid reinforcement learning","Faster multimodal responses with improved grounding","Unified MoE and dense experts with reinforcement fine-tuning","Expanded multilingual coverage with large context generalisation","Reinforced reasoning with reward models targeting mathematical proofs","Long-context orchestration and improved agentic behaviours","Mixture-of-experts scaling with automated reasoning curriculum","Structured tool-use planning with autonomous memory","Frontier reasoning with multi-agent constitutional guidance","Next-generation multimodal orchestration with autonomous tool chains","Iterative self-improvement through agentic evaluation loops","Hybrid symbolic-neural planning with compressed memory"]],["influences",["None","Attention Is All You Need","Attention Is All You Need","Attention Is All You Need","GPT-1","Transformer-XL, BERT","BERT","GPT-2","BERT","Attention Is All You Need","Attention Is All You Need","BERT","GPT-2","T5","Attention Is All You Need","Attention Is All You Need","Switch Transformer","GPT-3","Gopher","LaMDA","T5","GPT-3","GPT-3, Megatron-LM","InstructGPT","Chinchilla","Chinchilla, GPT-3","Constitutional AI","LLaMA","Claude 1","LLaMA","LLaMA","Claude 1","Chinchilla, LLaMA","Chinchilla, LLaMA","Baichuan-7B","Claude 2","Llama 2","Mistral 7B","InternLM-7B","Baichuan2","PaLM","Claude 2.1","Claude 2.1","Claude 2.1","Llama 2","GPT-4","Claude 3 Sonnet","Qwen 7B","Llama 3","LLaMA","Claude 3 Haiku","DeepSeek-V2.5","Qwen2","DeepSeek-V3","Claude 3.5 Sonnet","Qwen2.5 (Max)","Claude 3.7 Sonnet","Claude 3 Opus","GPT-4o","Claude 4 Opus","Claude 4 Sonnet"]]]},"edges":[{"type":"map","entries":[["x0",0.0],["y0",0.0],["z0",24.0],["x1",365.0],["y1",1.0],["z1",2.0]]},{"type":"map","entries":[["x0",0.0],["y0",0.0],["z0",24.0],["x1",487.0],["y1",2.0],["z1",4.0]]},{"type":"map","entries":[["x0",0.0],["y0",0.0],["z0",24.0],["x1",579.0],["y1",3.0],["z1",49.0]]},{"type":"map","entries":[["x0",0.0],["y0",0.0],["z0",24.0],["x1",852.0],["y1",9.0],["z1",9.0]]},{"type":"map","entries":[["x0",0.0],["y0",0.0],["z0",24.0],["x1",852.0],["y1",10.0],["z1",56.0]]},{"type":"map","entries":[["x0",0.0],["y0",0.0],["z0",24.0],["x1",1430.0],["y1",14.0],["z1",10.0]]},{"type":"map","entries":[["x0",0.0],["y0",0.0],["z0",24.0],["x1",1644.0],["y1",15.0],["z1",48.0]]},{"type":"map","entries":[["x0",365.0],["y0",1.0],["z0",2.0],["x1",610.0],["y1",4.0],["z1",47.0]]},{"type":"map","entries":[["x0",487.0],["y0",2.0],["z0",4.0],["x1",730.0],["y1",5.0],["z1",42.0]]},{"type":"map","entries":[["x0",487.0],["y0",2.0],["z0",4.0],["x1",760.0],["y1",6.0],["z1",39.0]]},{"type":"map","entries":[["x0",487.0],["y0",2.0],["z0",4.0],["x1",822.0],["y1",8.0],["z1",40.0]]},{"type":"map","entries":[["x0",487.0],["y0",2.0],["z0",4.0],["x1",1004.0],["y1",11.0],["z1",45.0]]},{"type":"map","entries":[["x0",579.0],["y0",3.0],["z0",49.0],["x1",730.0],["y1",5.0],["z1",42.0]]},{"type":"map","entries":[["x0",610.0],["y0",4.0],["z0",47.0],["x1",791.0],["y1",7.0],["z1",34.0]]},{"type":"map","entries":[["x0",610.0],["y0",4.0],["z0",47.0],["x1",1065.0],["y1",12.0],["z1",0.0]]},{"type":"map","entries":[["x0",791.0],["y0",7.0],["z0",34.0],["x1",1856.0],["y1",22.0],["z1",36.0]]},{"type":"map","entries":[["x0",852.0],["y0",10.0],["z0",56.0],["x1",1310.0],["y1",13.0],["z1",53.0]]},{"type":"map","entries":[["x0",852.0],["y0",10.0],["z0",56.0],["x1",1795.0],["y1",20.0],["z1",31.0]]},{"type":"map","entries":[["x0",1065.0],["y0",12.0],["z0",0.0],["x1",1675.0],["y1",17.0],["z1",44.0]]},{"type":"map","entries":[["x0",1065.0],["y0",12.0],["z0",0.0],["x1",1795.0],["y1",21.0],["z1",46.0]]},{"type":"map","entries":[["x0",1065.0],["y0",12.0],["z0",0.0],["x1",1856.0],["y1",22.0],["z1",36.0]]},{"type":"map","entries":[["x0",1065.0],["y0",12.0],["z0",0.0],["x1",2099.0],["y1",25.0],["z1",27.0]]},{"type":"map","entries":[["x0",1310.0],["y0",13.0],["z0",53.0],["x1",1644.0],["y1",16.0],["z1",19.0]]},{"type":"map","entries":[["x0",1430.0],["y0",14.0],["z0",10.0],["x1",1765.0],["y1",19.0],["z1",41.0]]},{"type":"map","entries":[["x0",1644.0],["y0",15.0],["z0",48.0],["x1",1734.0],["y1",18.0],["z1",8.0]]},{"type":"map","entries":[["x0",1675.0],["y0",17.0],["z0",44.0],["x1",2009.0],["y1",23.0],["z1",50.0]]},{"type":"map","entries":[["x0",1734.0],["y0",18.0],["z0",8.0],["x1",2071.0],["y1",24.0],["z1",12.0]]},{"type":"map","entries":[["x0",1734.0],["y0",18.0],["z0",8.0],["x1",2099.0],["y1",25.0],["z1",27.0]]},{"type":"map","entries":[["x0",1734.0],["y0",18.0],["z0",8.0],["x1",2252.0],["y1",32.0],["z1",6.0]]},{"type":"map","entries":[["x0",1734.0],["y0",18.0],["z0",8.0],["x1",2283.0],["y1",33.0],["z1",51.0]]},{"type":"map","entries":[["x0",1765.0],["y0",19.0],["z0",41.0],["x1",2436.0],["y1",40.0],["z1",32.0]]},{"type":"map","entries":[["x0",2009.0],["y0",23.0],["z0",50.0],["x1",2099.0],["y1",26.0],["z1",1.0]]},{"type":"map","entries":[["x0",2071.0],["y0",24.0],["z0",12.0],["x1",2191.0],["y1",27.0],["z1",5.0]]},{"type":"map","entries":[["x0",2071.0],["y0",24.0],["z0",12.0],["x1",2221.0],["y1",29.0],["z1",38.0]]},{"type":"map","entries":[["x0",2071.0],["y0",24.0],["z0",12.0],["x1",2221.0],["y1",30.0],["z1",58.0]]},{"type":"map","entries":[["x0",2071.0],["y0",24.0],["z0",12.0],["x1",2252.0],["y1",32.0],["z1",6.0]]},{"type":"map","entries":[["x0",2071.0],["y0",24.0],["z0",12.0],["x1",2283.0],["y1",33.0],["z1",51.0]]},{"type":"map","entries":[["x0",2071.0],["y0",24.0],["z0",12.0],["x1",2649.0],["y1",49.0],["z1",54.0]]},{"type":"map","entries":[["x0",2099.0],["y0",25.0],["z0",27.0],["x1",2526.0],["y1",45.0],["z1",60.0]]},{"type":"map","entries":[["x0",2099.0],["y0",26.0],["z0",1.0],["x1",2221.0],["y1",28.0],["z1",13.0]]},{"type":"map","entries":[["x0",2099.0],["y0",26.0],["z0",1.0],["x1",2252.0],["y1",31.0],["z1",28.0]]},{"type":"map","entries":[["x0",2191.0],["y0",27.0],["z0",5.0],["x1",2283.0],["y1",34.0],["z1",22.0]]},{"type":"map","entries":[["x0",2221.0],["y0",28.0],["z0",13.0],["x1",2344.0],["y1",35.0],["z1",20.0]]},{"type":"map","entries":[["x0",2221.0],["y0",29.0],["z0",38.0],["x1",2344.0],["y1",36.0],["z1",3.0]]},{"type":"map","entries":[["x0",2221.0],["y0",29.0],["z0",38.0],["x1",2496.0],["y1",44.0],["z1",57.0]]},{"type":"map","entries":[["x0",2221.0],["y0",30.0],["z0",58.0],["x1",2405.0],["y1",38.0],["z1",25.0]]},{"type":"map","entries":[["x0",2252.0],["y0",32.0],["z0",6.0],["x1",2557.0],["y1",47.0],["z1",7.0]]},{"type":"map","entries":[["x0",2283.0],["y0",33.0],["z0",51.0],["x1",2374.0],["y1",37.0],["z1",52.0]]},{"type":"map","entries":[["x0",2283.0],["y0",34.0],["z0",22.0],["x1",2405.0],["y1",39.0],["z1",11.0]]},{"type":"map","entries":[["x0",2344.0],["y0",35.0],["z0",20.0],["x1",2465.0],["y1",41.0],["z1",15.0]]},{"type":"map","entries":[["x0",2344.0],["y0",35.0],["z0",20.0],["x1",2465.0],["y1",42.0],["z1",30.0]]},{"type":"map","entries":[["x0",2344.0],["y0",35.0],["z0",20.0],["x1",2465.0],["y1",43.0],["z1",17.0]]},{"type":"map","entries":[["x0",2465.0],["y0",41.0],["z0",15.0],["x1",2679.0],["y1",50.0],["z1",16.0]]},{"type":"map","entries":[["x0",2465.0],["y0",42.0],["z0",30.0],["x1",2557.0],["y1",46.0],["z1",23.0]]},{"type":"map","entries":[["x0",2465.0],["y0",43.0],["z0",17.0],["x1",2891.0],["y1",57.0],["z1",18.0]]},{"type":"map","entries":[["x0",2496.0],["y0",44.0],["z0",57.0],["x1",2587.0],["y1",48.0],["z1",35.0]]},{"type":"map","entries":[["x0",2526.0],["y0",45.0],["z0",60.0],["x1",2983.0],["y1",58.0],["z1",37.0]]},{"type":"map","entries":[["x0",2557.0],["y0",46.0],["z0",23.0],["x1",2802.0],["y1",54.0],["z1",29.0]]},{"type":"map","entries":[["x0",2557.0],["y0",47.0],["z0",7.0],["x1",2771.0],["y1",52.0],["z1",14.0]]},{"type":"map","entries":[["x0",2649.0],["y0",49.0],["z0",54.0],["x1",2740.0],["y1",51.0],["z1",59.0]]},{"type":"map","entries":[["x0",2740.0],["y0",51.0],["z0",59.0],["x1",2771.0],["y1",53.0],["z1",43.0]]},{"type":"map","entries":[["x0",2771.0],["y0",52.0],["z0",14.0],["x1",2861.0],["y1",55.0],["z1",33.0]]},{"type":"map","entries":[["x0",2802.0],["y0",54.0],["z0",29.0],["x1",2891.0],["y1",56.0],["z1",55.0]]},{"type":"map","entries":[["x0",2891.0],["y0",56.0],["z0",55.0],["x1",3014.0],["y1",60.0],["z1",21.0]]},{"type":"map","entries":[["x0",2891.0],["y0",57.0],["z0",18.0],["x1",2983.0],["y1",59.0],["z1",26.0]]}],"axis_labels":{"type":"map","entries":[["x","Time (days since Jun 2017)"],["y","Model (chronological index)"],["z","Technical innovation"]]},"axis_limits":{"type":"map","entries":[["x",[-150.70000000000002,3164.7]],["y",[-3.0,63.0]],["z",[-3.0,63.0]]]},"categories":{"type":"map","entries":[["models",[{"type":"map","entries":[["index",0],["label","Attention Is All You Need"]]},{"type":"map","entries":[["index",1],["label","GPT-1"]]},{"type":"map","entries":[["index",2],["label","BERT"]]},{"type":"map","entries":[["index",3],["label","Transformer-XL"]]},{"type":"map","entries":[["index",4],["label","GPT-2"]]},{"type":"map","entries":[["index",5],["label","XLNet"]]},{"type":"map","entries":[["index",6],["label","RoBERTa"]]},{"type":"map","entries":[["index",7],["label","Megatron-LM"]]},{"type":"map","entries":[["index",8],["label","ALBERT"]]},{"type":"map","entries":[["index",9],["label","BART"]]},{"type":"map","entries":[["index",10],["label","T5"]]},{"type":"map","entries":[["index",11],["label","ELECTRA"]]},{"type":"map","entries":[["index",12],["label","GPT-3"]]},{"type":"map","entries":[["index",13],["label","Switch Transformer"]]},{"type":"map","entries":[["index",14],["label","LaMDA"]]},{"type":"map","entries":[["index",15],["label","Gopher"]]},{"type":"map","entries":[["index",16],["label","GLaM"]]},{"type":"map","entries":[["index",17],["label","InstructGPT"]]},{"type":"map","entries":[["index",18],["label","Chinchilla"]]},{"type":"map","entries":[["index",19],["label","PaLM"]]},{"type":"map","entries":[["index",20],["label","UL2"]]},{"type":"map","entries":[["index",21],["label","OPT"]]},{"type":"map","entries":[["index",22],["label","BLOOM"]]},{"type":"map","entries":[["index",23],["label","Constitutional AI"]]},{"type":"map","entries":[["index",24],["label","LLaMA"]]},{"type":"map","entries":[["index",25],["label","GPT-4"]]},{"type":"map","entries":[["index",26],["label","Claude 1"]]},{"type":"map","entries":[["index",27],["label","Baichuan-7B"]]},{"type":"map","entries":[["index",28],["label","Claude 2"]]},{"type":"map","entries":[["index",29],["label","Llama 2"]]},{"type":"map","entries":[["index",30],["label","InternLM-7B"]]},{"type":"map","entries":[["index",31],["label","Claude Instant 1.2"]]},{"type":"map","entries":[["index",32],["label","Qwen 7B"]]},{"type":"map","entries":[["index",33],["label","Mistral 7B"]]},{"type":"map","entries":[["index",34],["label","Baichuan2"]]},{"type":"map","entries":[["index",35],["label","Claude 2.1"]]},{"type":"map","entries":[["index",36],["label","Yi-34B"]]},{"type":"map","entries":[["index",37],["label","Mixtral 8x7B"]]},{"type":"map","entries":[["index",38],["label","InternLM2-7B"]]},{"type":"map","entries":[["index",39],["label","Baichuan3"]]},{"type":"map","entries":[["index",40],["label","Gemini 1.5"]]},{"type":"map","entries":[["index",41],["label","Claude 3 Haiku"]]},{"type":"map","entries":[["index",42],["label","Claude 3 Sonnet"]]},{"type":"map","entries":[["index",43],["label","Claude 3 Opus"]]},{"type":"map","entries":[["index",44],["label","Llama 3"]]},{"type":"map","entries":[["index",45],["label","GPT-4o"]]},{"type":"map","entries":[["index",46],["label","Claude 3.5 Sonnet"]]},{"type":"map","entries":[["index",47],["label","Qwen2"]]},{"type":"map","entries":[["index",48],["label","Llama 3.1"]]},{"type":"map","entries":[["index",49],["label","DeepSeek-V2.5"]]},{"type":"map","entries":[["index",50],["label","Claude 3.5 Haiku"]]},{"type":"map","entries":[["index",51],["label","DeepSeek-V3"]]},{"type":"map","entries":[["index",52],["label","Qwen2.5 (Max)"]]},{"type":"map","entries":[["index",53],["label","DeepSeek-R1"]]},{"type":"map","entries":[["index",54],["label","Claude 3.7 Sonnet"]]},{"type":"map","entries":[["index",55],["label","Qwen3"]]},{"type":"map","entries":[["index",56],["label","Claude 4 Sonnet"]]},{"type":"map","entries":[["index",57],["label","Claude 4 Opus"]]},{"type":"map","entries":[["index",58],["label","GPT-5"]]},{"type":"map","entries":[["index",59],["label","Claude Opus 4.1"]]},{"type":"map","entries":[["index",60],["label","Claude 4.5 Sonnet"]]}]],["innovations",[{"type":"map","entries":[["index",0],["label","175B parameter scaling with in-context learning across diverse tasks"]]},{"type":"map","entries":[["index",1],["label","Applied constitutional AI feedback to align helpful and harmless behaviour"]]},{"type":"map","entries":[["index",2],["label","Applied decoder-only Transformer with generative pretraining on BooksCorpus"]]},{"type":"map","entries":[["index",3],["label","Balanced bilingual dataset with progressive context extension"]]},{"type":"map","entries":[["index",4],["label","Bidirectional encoder pretraining with masked language modelling and next sentence prediction"]]},{"type":"map","entries":[["index",5],["label","Chinese-English bilingual adaptation of LLaMA with extended vocabulary"]]},{"type":"map","entries":[["index",6],["label","Chinese-English foundation with rotary embeddings and fine-grained tokeniser"]]},{"type":"map","entries":[["index",7],["label","Data mixture refresh with extended context and reasoning tuning"]]},{"type":"map","entries":[["index",8],["label","Data/parameter scaling law balancing showing benefits of more tokens over parameters"]]},{"type":"map","entries":[["index",9],["label","Denoising autoencoder that bridges encoder-decoder pretraining for text generation"]]},{"type":"map","entries":[["index",10],["label","Dialogue-optimised training with safety fine-tuning and grounded responses"]]},{"type":"map","entries":[["index",11],["label","Domain-adaptive pretraining with knowledge-augmented decoding"]]},{"type":"map","entries":[["index",12],["label","Efficient scaling via smaller datasets, grouped-query attention, and open research weights"]]},{"type":"map","entries":[["index",13],["label","Expanded context and constitutional alignment refinements with tool use"]]},{"type":"map","entries":[["index",14],["label","Expanded multilingual coverage with large context generalisation"]]},{"type":"map","entries":[["index",15],["label","Fast multimodal assistant with revised constitutional tuning"]]},{"type":"map","entries":[["index",16],["label","Faster multimodal responses with improved grounding"]]},{"type":"map","entries":[["index",17],["label","Flagship Claude with state-of-the-art reasoning and coding alignment"]]},{"type":"map","entries":[["index",18],["label","Frontier reasoning with multi-agent constitutional guidance"]]},{"type":"map","entries":[["index",19],["label","Hierarchical mixture-of-experts with token-level routing across 1.2T parameters"]]},{"type":"map","entries":[["index",20],["label","Higher factual reliability and longer context for enterprise tasks"]]},{"type":"map","entries":[["index",21],["label","Hybrid symbolic-neural planning with compressed memory"]]},{"type":"map","entries":[["index",22],["label","Improved bilingual data curation with extended context and tool APIs"]]},{"type":"map","entries":[["index",23],["label","Improved tool-use reliability and creative reasoning"]]},{"type":"map","entries":[["index",24],["label","Introduced the Transformer architecture with multi-head self-attention and positional encoding"]]},{"type":"map","entries":[["index",25],["label","Iterative distillation with modular tool-using skills and expanded context"]]},{"type":"map","entries":[["index",26],["label","Iterative self-improvement through agentic evaluation loops"]]},{"type":"map","entries":[["index",27],["label","Large multimodal alignment with reinforced fine-tuning and tool integration"]]},{"type":"map","entries":[["index",28],["label","Latency-optimised Claude variant retaining constitutional safety guarantees"]]},{"type":"map","entries":[["index",29],["label","Long-context orchestration and improved agentic behaviours"]]},{"type":"map","entries":[["index",30],["label","Mid-tier multimodal reasoning with tool orchestration"]]},{"type":"map","entries":[["index",31],["label","Mixture-of-denoisers objective supporting multiple corruption schemes for unified learning"]]},{"type":"map","entries":[["index",32],["label","Mixture-of-experts multimodal model with million-token context"]]},{"type":"map","entries":[["index",33],["label","Mixture-of-experts scaling with automated reasoning curriculum"]]},{"type":"map","entries":[["index",34],["label","Model parallelism for trillion-parameter scale using tensor and pipeline parallelism"]]},{"type":"map","entries":[["index",35],["label","Multi-token prediction and improved tool-calling APIs"]]},{"type":"map","entries":[["index",36],["label","Multilingual open-access 176B parameter model trained collaboratively via Megatron-DeepSpeed"]]},{"type":"map","entries":[["index",37],["label","Next-generation multimodal orchestration with autonomous tool chains"]]},{"type":"map","entries":[["index",38],["label","Open-weight release with supervised fine-tuning and RLHF safety tuning"]]},{"type":"map","entries":[["index",39],["label","Optimised masked language modelling with longer training, dynamic masking, and larger batches"]]},{"type":"map","entries":[["index",40],["label","Parameter sharing and factorised embeddings for lightweight bidirectional transformers"]]},{"type":"map","entries":[["index",41],["label","Pathways system with parallelism and chain-of-thought prompting across 540B parameters"]]},{"type":"map","entries":[["index",42],["label","Permuted language modelling objective blending autoregressive and autoencoding pretraining"]]},{"type":"map","entries":[["index",43],["label","Reinforced reasoning with reward models targeting mathematical proofs"]]},{"type":"map","entries":[["index",44],["label","Reinforcement learning from human feedback tailored to instruction following"]]},{"type":"map","entries":[["index",45],["label","Replaced masked language modelling with discriminator that detects replaced tokens"]]},{"type":"map","entries":[["index",46],["label","Reproducible GPT-3 class model with fully documented training pipeline"]]},{"type":"map","entries":[["index",47],["label","Scaled decoder-only models with zero-shot transfer via WebText"]]},{"type":"map","entries":[["index",48],["label","Scaling laws with retrieval-style evaluation and precision study for large transformers"]]},{"type":"map","entries":[["index",49],["label","Segment-level recurrence and relative positional encoding for long-context modelling"]]},{"type":"map","entries":[["index",50],["label","Self-critiquing alignment loop guided by explicit normative principles"]]},{"type":"map","entries":[["index",51],["label","Sliding window attention and grouped-query attention for efficient small models"]]},{"type":"map","entries":[["index",52],["label","Sparse mixture-of-experts combining eight Mistral experts with router training"]]},{"type":"map","entries":[["index",53],["label","Sparse mixture-of-experts routing enabling trillion-parameter efficiency"]]},{"type":"map","entries":[["index",54],["label","Sparse mixture-of-experts with hybrid reinforcement learning"]]},{"type":"map","entries":[["index",55],["label","Structured tool-use planning with autonomous memory"]]},{"type":"map","entries":[["index",56],["label","Text-to-Text framework with unified transfer learning and span-corruption objective"]]},{"type":"map","entries":[["index",57],["label","Token-efficient vocabulary and speculatively decoded training mix"]]},{"type":"map","entries":[["index",58],["label","Toolkit-oriented Chinese open model with multi-stage pretraining and alignment"]]},{"type":"map","entries":[["index",59],["label","Unified MoE and dense experts with reinforcement fine-tuning"]]},{"type":"map","entries":[["index",60],["label","Unified multimodal end-to-end model with real-time streaming latency"]]}]]]},"legend_items":[{"type":"map","entries":[["label","Alignment"],["color","#1f77b4"]]},{"type":"map","entries":[["label","Baichuan"],["color","#aec7e8"]]},{"type":"map","entries":[["label","Claude"],["color","#ff7f0e"]]},{"type":"map","entries":[["label","DeepMind/Scaling"],["color","#ffbb78"]]},{"type":"map","entries":[["label","DeepSeek"],["color","#2ca02c"]]},{"type":"map","entries":[["label","Encoder-only"],["color","#98df8a"]]},{"type":"map","entries":[["label","GPT"],["color","#d62728"]]},{"type":"map","entries":[["label","Google"],["color","#ff9896"]]},{"type":"map","entries":[["label","InternLM"],["color","#9467bd"]]},{"type":"map","entries":[["label","LLaMA"],["color","#c5b0d5"]]},{"type":"map","entries":[["label","Long-context"],["color","#8c564b"]]},{"type":"map","entries":[["label","Mistral"],["color","#c49c94"]]},{"type":"map","entries":[["label","Mixture-of-Experts"],["color","#e377c2"]]},{"type":"map","entries":[["label","Open-Source GPT"],["color","#f7b6d2"]]},{"type":"map","entries":[["label","Qwen"],["color","#7f7f7f"]]},{"type":"map","entries":[["label","Root"],["color","#c7c7c7"]]},{"type":"map","entries":[["label","Scaling"],["color","#bcbd22"]]},{"type":"map","entries":[["label","Seq2Seq"],["color","#dbdb8d"]]},{"type":"map","entries":[["label","Yi"],["color","#17becf"]]}],"point_size":16.0,"background_color":"#05070d","instructions":"Drag to rotate \u2022 Scroll to zoom \u2022 Hover a node to inspect the model and its links. Panels list the indices used on the model and innovation axes."}}]}}
     </script>
     <script type="text/javascript">
       (function() {
@@ -29,8 +625,8 @@ Bokeh.set_log_level("info");
           Bokeh.safely(function() {
             (function(root) {
               function embed_document(root) {
-              const docs_json = document.getElementById('c4543685-d7c8-4f05-90e3-440d0de391cf').textContent;
-              const render_items = [{"docid":"b8b35bf0-897c-49ff-a0a2-7d4556734a84","roots":{"p1006":"e94a46cc-4edd-4b54-ae9e-59a9d62e4c30"},"root_ids":["p1006"]}];
+              const docs_json = document.getElementById('ab64fd4d-fa49-4b78-9784-7a17ae041eba').textContent;
+              const render_items = [{"docid":"8efd06a3-88f0-4c98-b291-ea93dacfe3c6","roots":{"p1006":"c03e34db-b9f0-4e60-9482-918fceade9da"},"root_ids":["p1006"]}];
               root.Bokeh.embed.embed_items(docs_json, render_items);
               }
               if (root.Bokeh !== undefined) {
