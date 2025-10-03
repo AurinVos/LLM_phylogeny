@@ -1,0 +1,9 @@
+# Generated visualizations
+*.html
+
+# Python artifacts
+__pycache__/
+*.pyc
+
+# Virtual environment directories
+.venv/
