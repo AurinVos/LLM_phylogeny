@@ -1,5 +1,6 @@
 # Generated visualizations
 *.html
+!docs/*.html
 
 # Python artifacts
 __pycache__/
