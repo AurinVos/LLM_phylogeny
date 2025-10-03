@@ -9,23 +9,16 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import json
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
 import networkx as nx
 from bokeh.io import output_file, save, show
-from bokeh.models import (
-    BoxZoomTool,
-    HoverTool,
-    Label,
-    PanTool,
-    ResetTool,
-    TapTool,
-    WheelZoomTool,
-)
+from bokeh.models import Div
 from bokeh.palettes import Category20
-from bokeh.plotting import figure, from_networkx
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA_PATH = REPO_ROOT / "data" / "llm_models.csv"
@@ -182,99 +175,534 @@ def _prepare_visualisation(
 
 
 def _construct_bokeh_figure(
-    graph: nx.DiGraph, layout: TimelineLayout, color_map: Dict[str, str]
-):
-    """Create the configured Bokeh figure from prepared components."""
+    models: List[Dict[str, object]],
+    graph: nx.DiGraph,
+    layout: TimelineLayout,
+    color_map: Dict[str, str],
+) -> tuple[Div, Dict[str, object], str]:
+    """Create the interactive 3D figure rendered inside a Bokeh ``Div`` widget."""
 
-    plot = figure(
-        width=1200,
-        height=800,
-        x_axis_type="datetime",
-        x_range=layout.x_range_ms,
-        y_range=(-1, len(layout.families) + 1),
-        title="Phylogeny of Transformer Language Models",
-        toolbar_location="above",
-    )
-    plot.add_tools(PanTool(), WheelZoomTool(), BoxZoomTool(), ResetTool(), TapTool())
+    if not models:
+        raise ValueError("No models were provided to construct the 3D figure")
 
-    graph_renderer = from_networkx(graph, layout.node_positions_ms)
+    time_zero = models[0]["release_date"]
+    if not isinstance(time_zero, dt.datetime):
+        raise TypeError("Model release dates must be datetime objects")
 
-    node_source = graph_renderer.node_renderer.data_source
-    node_source.data["family"] = [graph.nodes[name]["family"] for name in graph.nodes]
-    node_source.data["release"] = [graph.nodes[name]["release_label"] for name in graph.nodes]
-    node_source.data["innovation"] = [graph.nodes[name]["innovation"] for name in graph.nodes]
-    node_source.data["color"] = [color_map[graph.nodes[name]["family"]] for name in graph.nodes]
+    model_indices = {model["name"]: index for index, model in enumerate(models)}
+    innovations = sorted({(model.get("innovation") or "Unknown") for model in models})
+    innovation_indices = {label: index for index, label in enumerate(innovations)}
 
-    graph_renderer.node_renderer.glyph.size = 18
-    graph_renderer.node_renderer.glyph.fill_color = "color"
-    graph_renderer.node_renderer.glyph.line_color = "#222222"
-
-    edge_source = graph_renderer.edge_renderer.data_source
-    edge_source.data["innovation"] = [
-        graph.nodes[end]["innovation"] for end in edge_source.data["end"]
-    ]
-    edge_source.data["release"] = [
-        graph.nodes[end]["release_label"] for end in edge_source.data["end"]
-    ]
-
-    graph_renderer.edge_renderer.glyph.line_alpha = 0.4
-    graph_renderer.edge_renderer.glyph.line_width = 2
-
-    plot.renderers.append(graph_renderer)
-
-    node_hover = HoverTool(
-        tooltips=[
-            ("Model", "@index"),
-            ("Family", "@family"),
-            ("Released", "@release"),
-            ("Key innovation", "@innovation"),
-        ],
-        renderers=[graph_renderer.node_renderer],
-    )
-    edge_hover = HoverTool(
-        tooltips=[
-            ("Influence", "@start → @end"),
-            ("Child release", "@release"),
-            ("Innovation carried forward", "@innovation"),
-        ],
-        renderers=[graph_renderer.edge_renderer],
-    )
-    plot.add_tools(node_hover, edge_hover)
-
-    # Configure y-axis to display family names.
-    families_sorted = list(layout.families)
-    plot.yaxis.ticker = list(range(len(families_sorted)))
-    plot.yaxis.major_label_overrides = {
-        index: family for index, family in enumerate(families_sorted)
+    node_data: Dict[str, List[object]] = {
+        "x": [],
+        "y": [],
+        "z": [],
+        "color": [],
+        "name": [],
+        "family": [],
+        "release": [],
+        "innovation": [],
+        "influences": [],
     }
-    plot.xaxis.axis_label = "Release timeline"
-    plot.yaxis.axis_label = "Model family"
+    positions: Dict[str, Dict[str, float]] = {}
 
-    # Add a subtitle style label to guide interaction.
-    subtitle = Label(
-        x=0,
-        y=len(families_sorted) + 0.8,
-        x_units="screen",
-        y_units="data",
-        text="Hover nodes or edges to see innovations. Use scroll to zoom.",
-        text_font_size="10pt",
+    seconds_in_day = 60 * 60 * 24
+
+    for model in models:
+        name = str(model["name"])
+        release_date: dt.datetime = model["release_date"]  # type: ignore[assignment]
+        x_value = (release_date - time_zero).total_seconds() / seconds_in_day
+        y_value = float(model_indices[name])
+        innovation_label = str(model.get("innovation") or "Unknown")
+        z_value = float(innovation_indices[innovation_label])
+
+        node_data["x"].append(x_value)
+        node_data["y"].append(y_value)
+        node_data["z"].append(z_value)
+        family = str(model["family"])
+        node_data["color"].append(color_map.get(family, "#9fa8da"))
+        node_data["name"].append(name)
+        node_data["family"].append(family)
+        node_data["release"].append(model["release_label"])
+        node_data["innovation"].append(innovation_label)
+        influences = model.get("influences") or []
+        node_data["influences"].append(", ".join(influences) if influences else "None")
+
+        positions[name] = {"x": x_value, "y": y_value, "z": z_value}
+
+    x_values = [float(value) for value in node_data["x"]]
+    y_values = [float(value) for value in node_data["y"]]
+    z_values = [float(value) for value in node_data["z"]]
+
+    def _with_padding(values: List[float], padding: float = 0.5) -> List[float]:
+        if not values:
+            return [0.0, 1.0]
+        span = max(values) - min(values)
+        if span == 0:
+            span = 1.0
+        pad = max(padding, span * 0.05)
+        return [min(values) - pad, max(values) + pad]
+
+    axis_limits = {
+        "x": _with_padding(x_values, padding=10.0),
+        "y": _with_padding(y_values, padding=1.5),
+        "z": _with_padding(z_values, padding=1.5),
+    }
+
+    edge_pairs: List[Dict[str, object]] = []
+    for start, end in graph.edges():
+        if start not in positions or end not in positions:
+            continue
+        start_pos = positions[start]
+        end_pos = positions[end]
+        edge_pairs.append(
+            {
+                "x0": start_pos["x"],
+                "y0": start_pos["y"],
+                "z0": start_pos["z"],
+                "x1": end_pos["x"],
+                "y1": end_pos["y"],
+                "z1": end_pos["z"],
+            }
+        )
+
+    category_data = {
+        "models": [
+            {"index": index, "label": str(model["name"])}
+            for index, model in enumerate(models)
+        ],
+        "innovations": [
+            {"index": innovation_indices[label], "label": str(label)}
+            for label in innovations
+        ],
+    }
+
+    axis_labels = {
+        "x": f"Time (days since {time_zero.strftime('%b %Y')})",
+        "y": "Model (chronological index)",
+        "z": "Technical innovation",
+    }
+
+    legend_items = [
+        {"label": family, "color": color_map[family]}
+        for family in layout.families
+    ]
+
+    instructions = (
+        "Drag to rotate • Scroll to zoom • Hover a node to inspect the model and its links. "
+        "Panels list the indices used on the model and innovation axes."
     )
-    plot.add_layout(subtitle)
 
-    # Add invisible circles for legend entries.
-    for family in families_sorted:
-        plot.scatter([], [], size=12, color=color_map[family], legend_label=family)
-    plot.legend.location = "top_left"
-    plot.legend.click_policy = "mute"
+    config = {
+        "data": node_data,
+        "edges": edge_pairs,
+        "axis_labels": axis_labels,
+        "axis_limits": axis_limits,
+        "categories": category_data,
+        "legend_items": legend_items,
+        "point_size": 16.0,
+        "background_color": "#05070d",
+        "instructions": instructions,
+    }
 
-    return plot
+    div, container_id = _build_threejs_div(config, width=1200, height=800)
+    return div, config, container_id
+
+
+
+def _build_threejs_div(config: Dict[str, object], *, width: int, height: int) -> tuple[Div, str]:
+    """Create a placeholder ``Div`` and identifier for post-processed Three.js wiring."""
+
+    container_id = f"three-phylogeny-{uuid.uuid4().hex}"
+    placeholder = f"__THREE_PHYLOGENY::{container_id}__"
+    div = Div(text=placeholder, width=width, height=height, render_as_text=False)
+    return div, container_id
+
+
+
+def _inject_threejs_html(
+    destination: Path,
+    *,
+    container_id: str,
+    config: Dict[str, object],
+    width: int,
+    height: int,
+) -> None:
+    """Post-process the saved HTML to embed the Three.js bootstrap script."""
+
+    html = destination.read_text(encoding="utf-8")
+    placeholder = f"__THREE_PHYLOGENY::{container_id}__"
+    container_markup = (
+        f'<div id="{container_id}" '
+        "class=\"three-phylogeny-container\" style=\"width:100%;height:100%;\"></div>"
+    )
+    if placeholder in html:
+        escaped_markup = json.dumps(container_markup)[1:-1]
+        html = html.replace(placeholder, escaped_markup)
+    elif container_markup not in html:
+        raise RuntimeError(
+            "Unable to locate Three.js container markup in saved HTML."
+        )
+
+    css_rules = """
+.three-phylogeny-container { position: relative; width: 100%; height: 100%; font-family: 'Inter','Helvetica Neue',Arial,sans-serif; }
+.three-phylogeny-overlay { position: absolute; inset: 0; pointer-events: none; color: #f8fafc; }
+.three-phylogeny-tooltip { position: absolute; min-width: 220px; background: rgba(15,23,42,0.92); border: 1px solid rgba(148,163,184,0.35); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.4; display: none; pointer-events: none; box-shadow: 0 10px 30px rgba(15,23,42,0.45); backdrop-filter: blur(6px); }
+.three-phylogeny-tooltip-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: #e2e8f0; }
+.three-phylogeny-tooltip-row { display: flex; justify-content: space-between; margin-bottom: 4px; gap: 12px; }
+.three-phylogeny-tooltip-row span:first-child { opacity: 0.75; }
+.three-phylogeny-axis-panel { position: absolute; bottom: 20px; left: 20px; padding: 12px 16px; border-radius: 10px; background: rgba(15,23,42,0.72); border: 1px solid rgba(148,163,184,0.35); backdrop-filter: blur(6px); box-shadow: 0 8px 25px rgba(15,23,42,0.35); pointer-events: auto; max-width: 360px; font-size: 13px; line-height: 1.5; }
+.three-phylogeny-axis-row { display: flex; justify-content: space-between; margin-bottom: 4px; gap: 12px; }
+.three-phylogeny-axis-row span:last-child { font-weight: 600; }
+.three-phylogeny-legend { position: absolute; top: 20px; left: 20px; display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 8px 14px; padding: 14px 16px; background: rgba(15,23,42,0.72); border-radius: 12px; border: 1px solid rgba(148,163,184,0.35); box-shadow: 0 8px 25px rgba(15,23,42,0.35); backdrop-filter: blur(6px); pointer-events: auto; }
+.three-phylogeny-legend-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #e2e8f0; }
+.three-phylogeny-swatch { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 2px 8px rgba(15,23,42,0.45); border: 1px solid rgba(15,23,42,0.4); display: inline-block; }
+.three-phylogeny-categories { position: absolute; right: 20px; top: 20px; display: grid; gap: 12px; width: min(320px, 28%); pointer-events: auto; }
+.three-phylogeny-category { background: rgba(15,23,42,0.72); border-radius: 12px; border: 1px solid rgba(148,163,184,0.35); padding: 14px 16px; backdrop-filter: blur(6px); box-shadow: 0 8px 25px rgba(15,23,42,0.35); max-height: 240px; overflow-y: auto; font-size: 12.5px; line-height: 1.5; }
+.three-phylogeny-category h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.01em; text-transform: uppercase; opacity: 0.8; }
+.three-phylogeny-category ul { margin: 0; padding-left: 18px; }
+.three-phylogeny-category li { margin-bottom: 4px; }
+.three-phylogeny-instructions { position: absolute; right: 20px; bottom: 20px; padding: 12px 16px; border-radius: 12px; background: rgba(15,23,42,0.72); border: 1px solid rgba(148,163,184,0.35); backdrop-filter: blur(6px); font-size: 13px; max-width: min(360px, 40%); box-shadow: 0 8px 25px rgba(15,23,42,0.35); pointer-events: auto; }
+.three-phylogeny-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #f8fafc; font-size: 16px; background: rgba(15,23,42,0.9); border-radius: 12px; }
+""".strip()
+
+    script_template = """
+(function() {
+  const CONFIG = __CONFIG__;
+  const CSS_RULES = __CSS__;
+  const TARGET_ID = '__CONTAINER_ID__';
+
+  function waitForHost() {
+    return new Promise((resolve) => {
+      let attempts = 0;
+      function check() {
+        const host = document.querySelector('[data-root-id] .bk-Div');
+        if (host) {
+          resolve(host);
+          return;
+        }
+        attempts += 1;
+        if (attempts > 200) {
+          console.error('Three.js host element not found');
+          resolve(null);
+          return;
+        }
+        requestAnimationFrame(check);
+      }
+      check();
+    });
+  }
+
+  waitForHost().then((host) => {
+    if (!host) {
+      return;
+    }
+
+    let container = document.getElementById(TARGET_ID);
+    if (!container) {
+      container = document.createElement('div');
+      container.id = TARGET_ID;
+      container.className = 'three-phylogeny-container';
+      container.style.width = '100%';
+      container.style.height = '100%';
+      host.innerHTML = '';
+      host.appendChild(container);
+    }
+
+    if (!document.getElementById('three-phylogeny-style')) {
+      const style = document.createElement('style');
+      style.id = 'three-phylogeny-style';
+      style.textContent = CSS_RULES;
+      document.head.appendChild(style);
+    }
+
+    function loadScript(url) {
+    return new Promise((resolve, reject) => {
+      const existing = Array.from(document.getElementsByTagName('script')).find((el) => el.src === url);
+      if (existing) {
+        if (existing.dataset.loaded === 'true') {
+          resolve();
+        } else {
+          const handle = () => { existing.dataset.loaded = 'true'; resolve(); };
+          existing.addEventListener('load', handle, {once: true});
+          existing.addEventListener('error', () => reject(new Error('Failed to load ' + url)), {once: true});
+        }
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = url;
+      script.dataset.loaded = 'false';
+      script.addEventListener('load', () => { script.dataset.loaded = 'true'; resolve(); }, {once: true});
+      script.addEventListener('error', () => reject(new Error('Failed to load ' + url)), {once: true});
+      document.head.appendChild(script);
+    });
+  }
+
+    const ensureThree = loadScript('assets/three.min.js');
+    ensureThree
+      .then(() => loadScript('assets/OrbitControls.js'))
+      .then(init)
+      .catch((err) => {
+        container.innerHTML = '<div class="three-phylogeny-error">Unable to load 3D resources. See console for details.</div>';
+        console.error(err);
+      });
+
+  function init() {
+    if (!(window.THREE && window.THREE.OrbitControls)) {
+      console.error('Three.js resources missing');
+      container.innerHTML = '<div class="three-phylogeny-error">Three.js resources missing.</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    const renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(CONFIG.background_color || '#05070d');
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+    scene.add(ambient);
+    const directional = new THREE.DirectionalLight(0xffffff, 0.65);
+    directional.position.set(1.2, 1.6, 2.4);
+    scene.add(directional);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'three-phylogeny-overlay';
+    container.appendChild(overlay);
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'three-phylogeny-tooltip';
+    overlay.appendChild(tooltip);
+
+    const axisPanel = document.createElement('div');
+    axisPanel.className = 'three-phylogeny-axis-panel';
+    overlay.appendChild(axisPanel);
+
+    ['x','y','z'].forEach((key) => {
+      const row = document.createElement('div');
+      row.className = 'three-phylogeny-axis-row';
+      const label = document.createElement('span');
+      label.textContent = CONFIG.axis_labels?.[key] || key.toUpperCase();
+      const span = document.createElement('span');
+      const limits = CONFIG.axis_limits?.[key] || [];
+      span.textContent = limits.map((value) => Number(value).toFixed(1)).join(' → ');
+      row.appendChild(label);
+      row.appendChild(span);
+      axisPanel.appendChild(row);
+    });
+
+    const legend = document.createElement('div');
+    legend.className = 'three-phylogeny-legend';
+    (CONFIG.legend_items || []).forEach((item) => {
+      const entry = document.createElement('div');
+      entry.className = 'three-phylogeny-legend-item';
+      entry.innerHTML = `<span class="three-phylogeny-swatch" style="background:${item.color || '#ffffff'}"></span><span>${item.label || ''}</span>`;
+      legend.appendChild(entry);
+    });
+    overlay.appendChild(legend);
+
+    const categoryWrap = document.createElement('div');
+    categoryWrap.className = 'three-phylogeny-categories';
+    overlay.appendChild(categoryWrap);
+
+    function buildCategory(key, title) {
+      const data = CONFIG.categories?.[key] || [];
+      if (!Array.isArray(data) || data.length === 0)
+        return;
+      const panel = document.createElement('div');
+      panel.className = 'three-phylogeny-category';
+      const heading = document.createElement('h3');
+      heading.textContent = title;
+      panel.appendChild(heading);
+      const list = document.createElement('ul');
+      data.forEach((entry) => {
+        const item = document.createElement('li');
+        item.textContent = `${entry.index}: ${entry.label}`;
+        list.appendChild(item);
+      });
+      panel.appendChild(list);
+      categoryWrap.appendChild(panel);
+    }
+
+    buildCategory('models', 'Model index');
+    buildCategory('innovations', 'Innovation index');
+
+    if (CONFIG.instructions) {
+      const instructions = document.createElement('div');
+      instructions.className = 'three-phylogeny-instructions';
+      instructions.textContent = CONFIG.instructions;
+      overlay.appendChild(instructions);
+    }
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const nodeData = CONFIG.data || {};
+    const count = (nodeData.x || []).length;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = Number(nodeData.x?.[i] ?? 0);
+      positions[i * 3 + 1] = Number(nodeData.y?.[i] ?? 0);
+      positions[i * 3 + 2] = Number(nodeData.z?.[i] ?? 0);
+      const color = new THREE.Color(nodeData.color?.[i] || '#ffffff');
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+    }
+
+    const pointGeometry = new THREE.BufferGeometry();
+    pointGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    pointGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const pointMaterial = new THREE.PointsMaterial({size: CONFIG.point_size || 16, vertexColors: true, sizeAttenuation: true});
+    const points = new THREE.Points(pointGeometry, pointMaterial);
+    scene.add(points);
+
+    const edges = CONFIG.edges || [];
+    if (edges.length > 0) {
+      const edgePositions = new Float32Array(edges.length * 6);
+      edges.forEach((edge, index) => {
+        edgePositions[index * 6] = Number(edge.x0 ?? 0);
+        edgePositions[index * 6 + 1] = Number(edge.y0 ?? 0);
+        edgePositions[index * 6 + 2] = Number(edge.z0 ?? 0);
+        edgePositions[index * 6 + 3] = Number(edge.x1 ?? 0);
+        edgePositions[index * 6 + 4] = Number(edge.y1 ?? 0);
+        edgePositions[index * 6 + 5] = Number(edge.z1 ?? 0);
+      });
+      const edgeGeometry = new THREE.BufferGeometry();
+      edgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(edgePositions, 3));
+      const edgeMaterial = new THREE.LineBasicMaterial({color: 0x8891a7, transparent: true, opacity: 0.35});
+      const edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+      scene.add(edgeLines);
+    }
+
+    const limits = CONFIG.axis_limits || {};
+    const xLimits = limits.x || [0, 1];
+    const yLimits = limits.y || [0, 1];
+    const zLimits = limits.z || [0, 1];
+    const origin = new THREE.Vector3(xLimits[0], yLimits[0], zLimits[0]);
+    const axisGroup = new THREE.Group();
+    const axisDefs = [
+      {dir: new THREE.Vector3(xLimits[1] - xLimits[0], 0, 0), color: 0xff6b6b},
+      {dir: new THREE.Vector3(0, yLimits[1] - yLimits[0], 0), color: 0x4ecdc4},
+      {dir: new THREE.Vector3(0, 0, zLimits[1] - zLimits[0]), color: 0x1a8cff},
+    ];
+    axisDefs.forEach((axis) => {
+      const geom = new THREE.BufferGeometry().setFromPoints([
+        origin,
+        origin.clone().add(axis.dir),
+      ]);
+      axisGroup.add(new THREE.Line(geom, new THREE.LineBasicMaterial({color: axis.color})));
+    });
+    scene.add(axisGroup);
+
+    function showTooltip(index, event) {
+      const name = nodeData.name?.[index] ?? '';
+      const family = nodeData.family?.[index] ?? '';
+      const release = nodeData.release?.[index] ?? '';
+      const innovation = nodeData.innovation?.[index] ?? '';
+      const influences = nodeData.influences?.[index] ?? 'None';
+      tooltip.innerHTML = `
+        <div class="three-phylogeny-tooltip-title">${name}</div>
+        <div class="three-phylogeny-tooltip-row"><span>Family</span><span>${family}</span></div>
+        <div class="three-phylogeny-tooltip-row"><span>Released</span><span>${release}</span></div>
+        <div class="three-phylogeny-tooltip-row"><span>Innovation</span><span>${innovation}</span></div>
+        <div class="three-phylogeny-tooltip-row"><span>Influences</span><span>${influences}</span></div>
+      `;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const left = event.clientX - rect.left + 14;
+      const top = event.clientY - rect.top + 14;
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${top}px`;
+      tooltip.style.display = 'block';
+    }
+
+    function hideTooltip() {
+      tooltip.style.display = 'none';
+    }
+
+    function onPointerMove(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+      raycaster.setFromCamera(mouse, camera);
+      const intersections = raycaster.intersectObject(points);
+      if (intersections.length > 0 && intersections[0].index != null) {
+        showTooltip(intersections[0].index, event);
+      } else {
+        hideTooltip();
+      }
+    }
+
+    renderer.domElement.addEventListener('mousemove', onPointerMove);
+    renderer.domElement.addEventListener('mouseleave', hideTooltip);
+
+    function resize() {
+      const viewWidth = container.clientWidth || __WIDTH__;
+      const viewHeight = container.clientHeight || __HEIGHT__;
+      renderer.setSize(viewWidth, viewHeight, false);
+      camera.aspect = viewWidth / viewHeight;
+      camera.updateProjectionMatrix();
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    const spanX = xLimits[1] - xLimits[0];
+    const spanY = yLimits[1] - yLimits[0];
+    const spanZ = zLimits[1] - zLimits[0];
+    const maxSpan = Math.max(spanX, spanY, spanZ, 1);
+    camera.position.set(origin.x + spanX * 0.6, origin.y + spanY * 0.5, origin.z + maxSpan * 2.2);
+    controls.target.copy(origin.clone().add(new THREE.Vector3(spanX / 2, spanY / 2, spanZ / 2)));
+
+    function renderLoop() {
+      requestAnimationFrame(renderLoop);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    renderLoop();
+  }
+  });
+})();
+"""
+
+    replacements = {
+        "__CONFIG__": json.dumps(config),
+        "__CONTAINER_ID__": container_id,
+        "__CSS__": json.dumps(css_rules),
+        "__WIDTH__": str(width),
+        "__HEIGHT__": str(height),
+    }
+
+    script_body = script_template
+    for key, value in replacements.items():
+        script_body = script_body.replace(key, value)
+
+    script_tag = f"<script type=\"text/javascript\">\n{script_body}\n</script>"
+
+    insertion_point = html.rfind("</body>")
+    if insertion_point == -1:
+        insertion_point = len(html)
+
+    updated_html = html[:insertion_point] + script_tag + "\n" + html[insertion_point:]
+    destination.write_text(updated_html, encoding="utf-8")
+
 
 
 def build_plot(*, data_path: Path | None = None):
     """Construct the interactive Bokeh plot for the phylogenetic graph."""
 
-    _, graph, layout, color_map = _prepare_visualisation(data_path=data_path)
-    return _construct_bokeh_figure(graph, layout, color_map)
+    models, graph, layout, color_map = _prepare_visualisation(data_path=data_path)
+    plot, _, _ = _construct_bokeh_figure(models, graph, layout, color_map)
+    return plot
 
 
 def export_static_svg(
@@ -382,12 +810,13 @@ def main(
     open_browser: bool = False,
 ) -> Path:
     """Generate the phylogeny plot and write it to an HTML file."""
-    _, graph, layout, color_map = _prepare_visualisation(data_path=data_path)
-    plot = _construct_bokeh_figure(graph, layout, color_map)
+    models, graph, layout, color_map = _prepare_visualisation(data_path=data_path)
+    plot, config, container_id = _construct_bokeh_figure(models, graph, layout, color_map)
     if output_path is None:
         output_path = DEFAULT_OUTPUT_PATH
     output_file(str(output_path), title="LLM Phylogeny")
     save(plot)
+    _inject_threejs_html(output_path, container_id=container_id, config=config, width=plot.width or 1200, height=plot.height or 800)
     if svg_output_path is not None:
         export_static_svg(graph, layout, color_map, svg_output_path)
     if open_browser:
