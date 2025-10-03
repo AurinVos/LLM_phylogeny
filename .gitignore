@@ -1,6 +1,5 @@
 # Generated visualizations
 *.html
-!docs/llm_phylogeny.html
 
 # Python artifacts
 __pycache__/
