@@ -5,6 +5,8 @@ architectural innovations. The interactive network links each release to the
 ideas it inherits so you can trace the technical lineage that shaped today's
 transformer ecosystem.
 
+![Static snapshot of the LLM phylogeny network](docs/interactive_llm_phylogeny.svg)
+
 ## Explore the interactive network
 
 GitHub strips the JavaScript that powers a Bokeh figure from Markdown pages, so
@@ -32,8 +34,10 @@ following options to open the same interactive HTML artifact that lives in
    ```bash
    python app/llm_phylogeny.py
    ```
-   The script will rebuild `docs/interactive_llm_phylogeny.html` from
-   `data/llm_models.csv`.
+   The script rebuilds both
+   `docs/interactive_llm_phylogeny.html`
+   and `docs/interactive_llm_phylogeny.svg` from `data/llm_models.csv`.
+   Use `--no-svg` if you want to skip regenerating the static figure.
 
 ## Dataset
 
