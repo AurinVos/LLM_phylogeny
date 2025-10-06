@@ -1,11 +1,11 @@
 name,brand,family,release_date,influences,innovation_category,innovation_summary
-SMILES Transformer,Aalto University,SMILES Transformer,2019-06-17,,Contextual SMILES Encoding,Introduced transformer encoders over SMILES strings with transfer learning for molecular property prediction.
-MolBERT,BenevolentAI,MolBERT,2020-03-02,SMILES Transformer,Domain-adaptive Pretraining,Performed masked LM pretraining on curated chemical corpora with chemically aware tokenisation.
-ChemBERTa,Hugging Face,ChemBERTa,2020-07-21,MolBERT,Open Benchmarking,Released open-source RoBERTa models on PubChem SMILES with standard fine-tuning recipes.
-MegaMolBART,Schrödinger,MegaMolBART,2020-10-15,ChemBERTa,Seq2Seq Molecular Generation,Adopted BART denoising objectives for conditional molecular generation and optimisation.
-MolGPT,Microsoft Research,MolGPT,2021-03-29,ChemBERTa,Autoregressive Design,Applied GPT-style decoding with property-conditioned prompts for de novo molecule synthesis.
-GeoMol,OATML,GeoMol,2021-07-02,MolGPT,Geometry-aware Representations,Combined graph neural networks with sequential decoding to respect 3D conformational constraints.
-Chemformer,AstraZeneca,Chemformer,2021-12-13,MegaMolBART,Multi-objective Finetuning,Unified reaction prediction and molecular optimisation with multitask seq2seq transfer.
-ChemGPT,IBM Research,ChemGPT,2022-12-08,MolGPT,Large-scale Chemical LM,Scaled autoregressive SMILES models with billion-parameter training and retrieval-augmented sampling.
-DrugGPT,University of Toronto,DrugGPT,2023-05-11,ChemGPT,Interactive Design Assistant,Integrated reinforcement learning with human-in-the-loop molecule editing for rapid lead discovery.
-SynMoGEN,MIT SynBio Center,SynMoGEN,2024-04-09,Chemformer; DrugGPT,Synthesis-aware Generation,Incorporated retrosynthesis constraints and lab automation feedback for synthesizable molecule proposals.
+SMILES Transformer,Aalto University (SMILES Transformer),SMILES Transformer,2019-06-17,,Contextual SMILES Encoding,Introduced transformer encoders over SMILES strings with transfer learning for molecular property prediction.
+MolBERT,BenevolentAI (MolBERT),MolBERT,2020-03-02,SMILES Transformer,Domain-adaptive Pretraining,Performed masked LM pretraining on curated chemical corpora with chemically aware tokenisation.
+ChemBERTa,Hugging Face (ChemBERTa),ChemBERTa,2020-07-21,MolBERT,Open Benchmarking,Released open-source RoBERTa models on PubChem SMILES with standard fine-tuning recipes.
+MegaMolBART,Schrödinger (MegaMolBART),MegaMolBART,2020-10-15,ChemBERTa,Seq2Seq Molecular Generation,Adopted BART denoising objectives for conditional molecular generation and optimisation.
+MolGPT,Microsoft Research (MolGPT),MolGPT,2021-03-29,ChemBERTa,Autoregressive Design,Applied GPT-style decoding with property-conditioned prompts for de novo molecule synthesis.
+GeoMol,OATML (GeoMol),GeoMol,2021-07-02,MolGPT,Geometry-aware Representations,Combined graph neural networks with sequential decoding to respect 3D conformational constraints.
+Chemformer,AstraZeneca (Chemformer),Chemformer,2021-12-13,MegaMolBART,Multi-objective Finetuning,Unified reaction prediction and molecular optimisation with multitask seq2seq transfer.
+ChemGPT,IBM Research (ChemGPT),ChemGPT,2022-12-08,MolGPT,Large-scale Chemical LM,Scaled autoregressive SMILES models with billion-parameter training and retrieval-augmented sampling.
+DrugGPT,University of Toronto (DrugGPT),DrugGPT,2023-05-11,ChemGPT,Interactive Design Assistant,Integrated reinforcement learning with human-in-the-loop molecule editing for rapid lead discovery.
+SynMoGEN,MIT SynBio Center (SynMoGEN),SynMoGEN,2024-04-09,Chemformer; DrugGPT,Synthesis-aware Generation,Incorporated retrosynthesis constraints and lab automation feedback for synthesizable molecule proposals.
