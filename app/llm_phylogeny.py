@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
@@ -310,6 +311,10 @@ def _construct_bokeh_figure(
     innovation_labels = {index: label for index, label in enumerate(layout.innovations)}
     plot.xaxis.ticker = list(innovation_labels.keys())
     plot.xaxis.major_label_overrides = innovation_labels
+    plot.xaxis.major_label_orientation = math.radians(-30)
+    plot.xaxis.major_label_text_align = "right"
+    plot.xaxis.major_label_text_baseline = "middle"
+    plot.xaxis.major_label_standoff = 12
     plot.xaxis.axis_label = "Technical innovation"
     plot.yaxis.axis_label = "Release timeline"
 
