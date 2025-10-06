@@ -1,3 +1,5 @@
+Please note: This is produced with LLMs only, so take care not to trust the figures at face value. 
+
 # LLM Phylogeny
 
 LLM Phylogeny maps how milestone large language models build on one another's
