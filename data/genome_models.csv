@@ -1,0 +1,11 @@
+name,brand,family,release_date,influences,innovation_category,innovation_summary
+SeqVec,Technical University of Munich,SeqVec,2019-03-11,,Protein Transfer Learning,Transferred protein language embeddings to genomic variant effect prediction via ELMo encoders.
+DNABERT,Huawei Noah's Ark Lab,DNABERT,2020-12-03,SeqVec,k-mer Tokenisation,Introduced k-mer tokenisation with BERT-style masked language modelling on genomic sequences.
+Enformer,DeepMind,Enformer,2021-03-04,DNABERT,Long-range Attention,Extended transformer receptive fields with dilated convolutions to predict gene expression from 200kb contexts.
+GENA-LM,Microsoft Research,GENA-LM,2021-11-18,DNABERT,Unified Biological LM,Pretrained a single transformer on DNA, RNA, and protein to share representations across modalities.
+Nucleotide Transformer,Meta AI,Nucleotide Transformer,2022-11-29,DNABERT,Evolutionary Scaling,Scaled masked nucleotide models to 2.5B parameters across 1000+ genomes for zero-shot annotation.
+HyenaDNA,Carnegie Mellon University,HyenaDNA,2023-04-17,Nucleotide Transformer,Implicit Long Context,Replaced attention with Hyena operators to capture million-token genomic dependencies efficiently.
+GenSLMs,Lanl Bioscience,GenSLMs,2023-06-30,Nucleotide Transformer,Variant Surveillance,Combined mixture-of-experts transformers with sparse attention for pandemic-scale genomic monitoring.
+GeneFormer,Broad Institute,GeneFormer,2023-07-14,GENA-LM,Single-cell Contextualisation,Adapted foundation models to single-cell expression atlases with masked modelling and perturbation alignment.
+GenomeGPT,University of California Santa Cruz,GenomeGPT,2023-10-18,Nucleotide Transformer,Generative Genome Design,Applied autoregressive decoding to design regulatory DNA with controllable motifs.
+EvoGene,Harvard Medical School,EvoGene,2024-05-22,HyenaDNA; GenSLMs,Evolutionary Forecasting,Integrated long-context transformers with diffusion priors to forecast adaptive genomic trajectories.

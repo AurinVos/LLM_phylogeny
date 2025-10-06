@@ -32,19 +32,23 @@ following options to open the same interactive HTML artifact that lives in
    ```
    Then visit [http://localhost:8000/interactive_llm_phylogeny.html](http://localhost:8000/interactive_llm_phylogeny.html) in your browser.
 
-3. **Regenerate the HTML** (optional) after editing the dataset:
+3. **Regenerate the HTML** (optional) after editing any dataset:
    ```bash
-   python app/llm_phylogeny.py
+   python app/llm_phylogeny.py \
+       --data data/llm_models.csv \
+       --output docs/interactive_llm_phylogeny.html \
+       --svg-output docs/interactive_llm_phylogeny.svg
    ```
-   The script rebuilds both
-   `docs/interactive_llm_phylogeny.html`
-   and `docs/interactive_llm_phylogeny.svg` from `data/llm_models.csv`.
-   Use `--no-svg` if you want to skip regenerating the static figure.
+   Use the `--data` flag to point at any CSV under `data/` and `--title` if you
+   want the figure header to reflect the dataset you are plotting. Pass
+   `--no-svg` to skip regenerating the static figure when only the interactive
+   output is needed.
 
 ## Dataset
 
-All model metadata is stored in [`data/llm_models.csv`](data/llm_models.csv) so
-the graph can be regenerated or extended with new models. Each row contains:
+All model metadata is stored in the CSV files under [`data/`](data) so any of
+the graphs can be regenerated or extended with new models. Every dataset shares
+the same schema, which keeps the tooling interchangeable. Each row contains:
 
 | column | description |
 | --- | --- |
@@ -57,7 +61,57 @@ the graph can be regenerated or extended with new models. Each row contains:
 | `innovation_summary` | Short description of what made the release notable. |
 
 Keep the CSV sorted chronologically by `release_date` so that the generated
-timeline flows naturally from oldest (bottom) to newest (top).
+timeline flows naturally from oldest (bottom) to newest (top). The repository
+currently ships with four curated datasets:
+
+- [`data/llm_models.csv`](data/llm_models.csv) – general-purpose transformer
+  language models spanning OpenAI, Anthropic, Google, Meta, and more.
+- [`data/protein_models.csv`](data/protein_models.csv) – protein language
+  models that capture evolutionary signals for design and structure prediction.
+- [`data/genome_models.csv`](data/genome_models.csv) – nucleotide-focused
+  models aimed at genomics, variant prioritisation, and long-range regulation.
+- [`data/small_molecule_models.csv`](data/small_molecule_models.csv) – chemical
+  foundation models for molecular property prediction and synthesis planning.
+
+Every CSV can be plugged directly into `app/llm_phylogeny.py`, making it easy
+to compare innovation trajectories across biological and general language
+models without changing the code.
+
+## Biological language model phylogenies
+
+In addition to the transformer family tree for mainstream LLMs, the project now
+charts three specialised domains of biological language models. Each static
+snapshot below links to an interactive HTML file in `docs/` that you can open
+following the same instructions as the primary chart.
+
+### Proteins
+
+![Static snapshot of the protein LM phylogeny](docs/protein_llm_phylogeny.svg)
+
+Protein language models progress from the recurrent UniRep encoder through
+benchmark-driven transformers such as TAPE, towards large-scale masked models
+including ProtBERT and ESM-2. Recent work fuses sequence modelling with
+structure-aware generation, culminating in tools like ESMFold and EvoDiff for
+designing novel proteins.
+
+### Genomes
+
+![Static snapshot of the genome LM phylogeny](docs/genome_llm_phylogeny.svg)
+
+Genome-focused language models extend tokenisation and attention mechanisms to
+cope with extremely long DNA contexts. Innovations such as DNABERT's k-mer
+tokenisation, Enformer's dilated attention, and HyenaDNA's implicit convolutions
+enable regulatory inference and surveillance models like GenSLMs and EvoGene.
+
+### Small molecules
+
+![Static snapshot of the small-molecule LM phylogeny](docs/small_molecule_llm_phylogeny.svg)
+
+Chemical language models start from SMILES Transformers for contextual
+representations and evolve through masked and denoising architectures like
+ChemBERTa and MegaMolBART. Subsequent models emphasise controllable generation
+and synthesis feedback, with ChemGPT, DrugGPT, and SynMoGEN integrating
+interactive design and retrosynthetic constraints.
 
 ## Development workflow
 
