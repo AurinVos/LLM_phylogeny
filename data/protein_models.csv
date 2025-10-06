@@ -10,3 +10,5 @@ ProteinBERT,Weizmann Institute (ProteinBERT),ProteinBERT,2021-02-15,ProtBERT,Hie
 ESM-2,Meta AI (ESM),ESM,2022-07-12,ESM-1b,Frontier Scaling,Trained 15B-parameter masked protein models with rotary embeddings and diverse evolutionary data.
 ESMFold,Meta AI (ESM),ESM,2022-07-19,ESM-2,Structure-Integrated LM,Combined ESM-2 representations with differentiable folding to infer 3D structures without multiple sequence alignments.
 EvoDiff,Meta AI & Microsoft Research (EvoDiff),EvoDiff,2023-06-15,ESM-2; ProtT5-XL,Diffusion Protein Generation,Used diffusion over residue space conditioned on embeddings to design functional proteins across scaffolds.
+ProGen2,Salesforce Research (ProGen2),ProGen,2023-11-16,ProGen; ProtT5-XL,Controlled Protein Generation,Expanded autoregressive modelling with conditioning tags for structure and function objectives across protein families.
+ESM-3,Meta AI (ESM),ESM,2024-06-04,ESM-2; ESMFold,Multimodal Protein Reasoning,Unified sequence, structure, and function prediction with joint masked modelling and SE(3)-equivariant decoders.

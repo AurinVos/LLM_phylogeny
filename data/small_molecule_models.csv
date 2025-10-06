@@ -7,5 +7,7 @@ MolGPT,Microsoft Research (MolGPT),MolGPT,2021-03-29,ChemBERTa,Autoregressive De
 GeoMol,OATML (GeoMol),GeoMol,2021-07-02,MolGPT,Geometry-aware Representations,Combined graph neural networks with sequential decoding to respect 3D conformational constraints.
 Chemformer,AstraZeneca (Chemformer),Chemformer,2021-12-13,MegaMolBART,Multi-objective Finetuning,Unified reaction prediction and molecular optimisation with multitask seq2seq transfer.
 ChemGPT,IBM Research (ChemGPT),ChemGPT,2022-12-08,MolGPT,Large-scale Chemical LM,Scaled autoregressive SMILES models with billion-parameter training and retrieval-augmented sampling.
+MolMIM,MIT-IBM Watson AI Lab (MolMIM),MolMIM,2023-03-28,Chemformer,Goal-directed Molecular Design,Combined masked infilling with reinforcement learning to steer molecules toward multi-property targets with expert feedback loops.
 DrugGPT,University of Toronto (DrugGPT),DrugGPT,2023-05-11,ChemGPT,Interactive Design Assistant,Integrated reinforcement learning with human-in-the-loop molecule editing for rapid lead discovery.
+ChemLLaMA,Basel University (ChemLLaMA),ChemLLaMA,2024-02-12,ChemGPT,Instruction-tuned Chemical LM,Aligned a general chemical language model with laboratory instruction datasets to support synthesis planning and property reasoning.
 SynMoGEN,MIT SynBio Center (SynMoGEN),SynMoGEN,2024-04-09,Chemformer; DrugGPT,Synthesis-aware Generation,Incorporated retrosynthesis constraints and lab automation feedback for synthesizable molecule proposals.

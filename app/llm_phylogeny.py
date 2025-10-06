@@ -329,16 +329,20 @@ def _construct_bokeh_figure(
 
     # Add invisible circles for legend entries positioned outside the plot area.
     legend_items: List[LegendItem] = []
-    for brand, color in color_map.items():
-        renderer = plot.scatter(
-            [],
-            [],
+    legend_x = layout.x_range[1] + 0.6
+    legend_y_start = layout.y_range_ms[1] + 86_400_000.0  # one day in ms offset
+    for index, (brand, color) in enumerate(color_map.items()):
+        legend_renderer = plot.scatter(
+            x=[legend_x],
+            y=[legend_y_start + index * 86_400_000.0],
             size=12,
-            color=color,
+            marker="circle",
+            fill_color=color,
+            line_color="#222222",
             muted_color=color,
             muted_alpha=0.15,
         )
-        legend_items.append(LegendItem(label=brand, renderers=[renderer]))
+        legend_items.append(LegendItem(label=brand, renderers=[legend_renderer]))
 
     legend = Legend(items=legend_items, title="Model brands")
     legend.border_line_color = None
