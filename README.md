@@ -1,4 +1,4 @@
-Please note: This is produced with LLMs only, so take care not to trust the figures at face value. 
+Please note: This is produced via LLM prompting only (via chat interphase of Codex), so take care not to trust the figures at face value. 
 
 # LLM Phylogeny
 
