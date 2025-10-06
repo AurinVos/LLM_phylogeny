@@ -4,12 +4,41 @@
     <meta charset="utf-8">
     <title>Phylogeny of Transformer Language Models</title>
     <style>
-      html, body {
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background-color: Canvas;
+        color: CanvasText;
+      }
+
+      *, *::before, *::after {
         box-sizing: border-box;
-        display: flow-root;
-        height: 100%;
+      }
+
+      body {
         margin: 0;
-        padding: 0;
+        min-height: 100vh;
+        padding: clamp(1rem, 4vw, 2.5rem);
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        background-color: inherit;
+        color: inherit;
+      }
+
+      .bk-root {
+        width: min(100%, 1100px);
+      }
+
+      .bk-root .bk-plot-layout {
+        width: 100% !important;
+      }
+
+      .bk-tooltip {
+        max-width: min(28rem, calc(100vw - 2rem));
+        pointer-events: none;
+        white-space: normal;
+        word-break: break-word;
       }
     </style>
 <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-3.8.0.min.js"></script>
@@ -55,6 +84,139 @@ Bokeh.set_log_level("info");
         };
         if (document.readyState != "loading") fn();
         else document.addEventListener("DOMContentLoaded", fn);
+      })();
+    </script>
+      <script>
+      (function() {
+        const rootEl = document.querySelector('[data-root-id]');
+        if (!rootEl || !window.Bokeh) {
+          return;
+        }
+
+        const TARGET_HEIGHT = 640;
+        const MIN_BORDER_TOP = 80;
+        const MIN_BORDER_BOTTOM = 80;
+        const MIN_BORDER_SIDE = 30;
+        const TOOLTIP_PADDING = 12;
+
+        function clampTooltip(tooltip) {
+          requestAnimationFrame(() => {
+            const rect = tooltip.getBoundingClientRect();
+            if (!rect.width && !rect.height) {
+              return;
+            }
+
+            let left = rect.left;
+            let top = rect.top;
+
+            const maxLeft = Math.max(TOOLTIP_PADDING, window.innerWidth - rect.width - TOOLTIP_PADDING);
+            const maxTop = Math.max(TOOLTIP_PADDING, window.innerHeight - rect.height - TOOLTIP_PADDING);
+
+            if (left < TOOLTIP_PADDING) {
+              left = TOOLTIP_PADDING;
+            } else if (left > maxLeft) {
+              left = maxLeft;
+            }
+
+            if (top < TOOLTIP_PADDING) {
+              top = TOOLTIP_PADDING;
+            } else if (top > maxTop) {
+              top = maxTop;
+            }
+
+            tooltip.style.left = `${Math.round(left)}px`;
+            tooltip.style.top = `${Math.round(top)}px`;
+          });
+        }
+
+        function trackTooltip(tooltip, observer) {
+          if (!(tooltip instanceof HTMLElement) || tooltip.dataset.tooltipWatcherAttached === 'true') {
+            return;
+          }
+          tooltip.dataset.tooltipWatcherAttached = 'true';
+          clampTooltip(tooltip);
+          observer.observe(tooltip, { attributes: true, attributeFilter: ['style'] });
+        }
+
+        function attachTooltipGuards() {
+          const tooltipStyleObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+              clampTooltip(mutation.target);
+            }
+          });
+
+          const tooltipSpawnObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+              mutation.addedNodes.forEach((node) => {
+                if (!(node instanceof HTMLElement)) {
+                  return;
+                }
+                if (node.classList.contains('bk-tooltip')) {
+                  trackTooltip(node, tooltipStyleObserver);
+                } else {
+                  node.querySelectorAll('.bk-tooltip').forEach((tooltip) => trackTooltip(tooltip, tooltipStyleObserver));
+                }
+              });
+            }
+          });
+
+          tooltipSpawnObserver.observe(document.body, { childList: true, subtree: true });
+          document.querySelectorAll('.bk-tooltip').forEach((tooltip) => trackTooltip(tooltip, tooltipStyleObserver));
+
+          window.addEventListener('resize', () => {
+            document.querySelectorAll('.bk-tooltip').forEach(clampTooltip);
+          });
+        }
+
+        function withBokehView(callback) {
+          const attempt = () => {
+            const view = window.Bokeh?.index?.[rootEl.dataset.rootId];
+            if (view) {
+              view.ready.then(() => callback(view));
+            } else {
+              requestAnimationFrame(attempt);
+            }
+          };
+
+          attempt();
+        }
+
+        function configurePlot(view) {
+          const plot = view.model;
+          const nextBorders = {
+            min_border_top: Math.max(plot.min_border_top ?? 0, MIN_BORDER_TOP),
+            min_border_bottom: Math.max(plot.min_border_bottom ?? 0, MIN_BORDER_BOTTOM),
+            min_border_left: Math.max(plot.min_border_left ?? 0, MIN_BORDER_SIDE),
+            min_border_right: Math.max(plot.min_border_right ?? 0, MIN_BORDER_SIDE),
+          };
+
+          plot.setv({
+            sizing_mode: 'scale_width',
+            height: TARGET_HEIGHT,
+            ...nextBorders,
+          });
+
+          if (typeof view.resize_layout === 'function') {
+            view.resize_layout();
+          }
+
+          if (typeof view.request_paint === 'function') {
+            view.request_paint();
+          }
+        }
+
+        const start = () => {
+          withBokehView((view) => {
+            configurePlot(view);
+            attachTooltipGuards();
+          });
+        };
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', start, { once: true });
+        } else {
+          start();
+        }
       })();
     </script>
   </body>
