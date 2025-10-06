@@ -2,13 +2,12 @@ name,brand,family,release_date,influences,innovation_category,innovation_summary
 UniRep,University of Washington (UniRep),UniRep,2019-07-19,,Sequence Representation,Trained a multiplicative LSTM on UniRef50 to produce fixed-length protein embeddings for downstream design tasks.
 TAPE Transformer,Stanford University (TAPE),TAPE,2019-09-09,UniRep,Benchmarking Framework,Released a protein transfer learning benchmark with transformer encoders and standard evaluation splits.
 ProGen,Salesforce Research (ProGen),ProGen,2020-01-21,TAPE Transformer,Autoregressive Protein LM,Applied large-scale transformer decoding on curated protein families to enable controllable sequence generation.
-ProtBERT,ProtTrans Consortium (ProtTrans),ProtTrans,2020-04-20,TAPE Transformer,Masked Protein LM,Scaled BERT-style masked language modelling on billions of amino acids with domain-specific tokenisation.
+ProtBERT,ProtTrans Consortium (ProtTrans),ProtTrans,2020-04-20,TAPE Transformer,Masked Protein LM,Scaled BERT-style masked language modelling on billions of amino acids with domain-specific tokenisation and distributed training.
 ESM-1b,Meta AI (ESM),ESM,2020-05-15,TAPE Transformer,Evolutionary Scaling,Extended masked protein transformers with 650M parameters to capture long-range residue contacts.
-ProtGPT2,GenBit Lab (ProtGPT2),ProtGPT2,2020-07-24,ProGen,Protein Design,Adopted GPT-2 style autoregressive modelling on protein sequences to sample diverse de novo designs.
-ProtT5-XL,ProtTrans Consortium (ProtTrans),ProtTrans,2020-12-15,ProtBERT,Text-to-Sequence Transfer,Adapted the T5 denoising objective to proteins for zero-shot annotation and fold prediction.
-ProteinBERT,Weizmann Institute (ProteinBERT),ProteinBERT,2021-02-15,ProtBERT,Hierarchical Annotation,Jointly optimised global and residue-level tasks with structured supervision for protein function prediction.
-ESM-2,Meta AI (ESM),ESM,2022-07-12,ESM-1b,Frontier Scaling,Trained 15B-parameter masked protein models with rotary embeddings and diverse evolutionary data.
-ESMFold,Meta AI (ESM),ESM,2022-07-19,ESM-2,Structure-Integrated LM,Combined ESM-2 representations with differentiable folding to infer 3D structures without multiple sequence alignments.
-EvoDiff,Meta AI & Microsoft Research (EvoDiff),EvoDiff,2023-06-15,ESM-2; ProtT5-XL,Diffusion Protein Generation,Used diffusion over residue space conditioned on embeddings to design functional proteins across scaffolds.
+ProtGPT2,GenBit Lab (ProtGPT2),ProtGPT2,2020-07-24,ProGen,Protein Design,Adopted GPT-2-style autoregressive modelling on protein sequences to sample diverse de novo designs with controllable conditioning.
+ProtT5-XL,ProtTrans Consortium (ProtTrans),ProtTrans,2020-12-15,ProtBERT,Text-to-Sequence Transfer,Adapted the T5 span-denoising objective to proteins for zero-shot annotation and fold prediction.
+ProteinBERT,Weizmann Institute (ProteinBERT),ProteinBERT,2021-02-15,ProtBERT,Hierarchical Annotation,Jointly optimised global and residue-level predictions via hierarchical supervision for protein function understanding.
+ESM-2,Meta AI (ESM),ESM,2022-07-12,ESM-1b,Frontier Scaling,Trained up to 15B-parameter masked protein transformers with rotary embeddings and extensive evolutionary data.
+ESMFold,Meta AI (ESM),ESM,2022-07-19,ESM-2,Structure-Integrated LM,Combined ESM-2 representations with end-to-end structure prediction to infer 3D folds without multiple sequence alignments.
+EvoDiff,Meta AI & Microsoft Research (EvoDiff),EvoDiff,2023-06-15,ESM-2; ProtT5-XL,Diffusion Protein Generation,Used residue-space diffusion conditioned on protein embeddings to design functional proteins across scaffolds.
 ProGen2,Salesforce Research (ProGen2),ProGen,2023-11-16,ProGen; ProtT5-XL,Controlled Protein Generation,Expanded autoregressive modelling with conditioning tags for structure and function objectives across protein families.
-ESM-3,Meta AI (ESM),ESM,2024-06-04,ESM-2; ESMFold,Multimodal Protein Reasoning,Unified sequence, structure, and function prediction with joint masked modelling and SE(3)-equivariant decoders.
