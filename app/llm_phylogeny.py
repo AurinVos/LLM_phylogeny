@@ -234,8 +234,9 @@ def _construct_bokeh_figure(
     """Create the configured Bokeh figure from prepared components."""
 
     plot = figure(
-        width=1200,
-        height=800,
+        width=960,
+        height=720,
+        sizing_mode="scale_width",
         y_axis_type="datetime",
         x_range=layout.x_range,
         y_range=layout.y_range_ms,
@@ -311,7 +312,7 @@ def _construct_bokeh_figure(
     innovation_labels = {index: label for index, label in enumerate(layout.innovations)}
     plot.xaxis.ticker = list(innovation_labels.keys())
     plot.xaxis.major_label_overrides = innovation_labels
-    plot.xaxis.major_label_orientation = math.radians(-30)
+    plot.xaxis.major_label_orientation = math.radians(-45)
     plot.xaxis.major_label_text_align = "right"
     plot.xaxis.major_label_text_baseline = "middle"
     plot.xaxis.major_label_standoff = 12

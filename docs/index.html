@@ -14,7 +14,7 @@
 
     body {
       margin: 0 auto;
-      max-width: 1000px;
+      max-width: min(1100px, calc(100vw - 2rem));
       padding: 2rem 1rem 3rem;
       line-height: 1.6;
     }
@@ -52,9 +52,11 @@
     iframe {
       margin-top: 1.5rem;
       width: 100%;
-      min-height: 70vh;
+      min-height: 560px;
+      height: clamp(560px, 80vh, 820px);
       border: 1px solid rgba(0, 0, 0, 0.15);
       border-radius: 0.5rem;
+      overflow: hidden;
     }
 
     noscript {
@@ -118,12 +120,82 @@
   <script>
     const figureSelect = document.getElementById('figure-select');
     const figureFrame = document.getElementById('figure-frame');
+    const MIN_IFRAME_HEIGHT = 560;
+    const MAX_IFRAME_HEIGHT = 860;
+    let resizeObserver = null;
+
+    function updateFrameHeight() {
+      const doc = figureFrame.contentDocument;
+      if (!doc) {
+        return;
+      }
+
+      const docElement = doc.documentElement;
+      const body = doc.body;
+      const contentHeight = Math.max(
+        docElement?.scrollHeight || 0,
+        docElement?.offsetHeight || 0,
+        body?.scrollHeight || 0,
+        body?.offsetHeight || 0,
+      );
+
+      const viewportLimit = Math.max(window.innerHeight - 140, MIN_IFRAME_HEIGHT);
+      const nextHeight = Math.max(
+        MIN_IFRAME_HEIGHT,
+        Math.min(contentHeight || MIN_IFRAME_HEIGHT, MAX_IFRAME_HEIGHT, viewportLimit),
+      );
+
+      figureFrame.style.height = `${Math.round(nextHeight)}px`;
+    }
+
+    function observeFrameContents() {
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+      }
+
+      const doc = figureFrame.contentDocument;
+      if (!doc) {
+        return;
+      }
+
+      if (typeof ResizeObserver === 'function') {
+        resizeObserver = new ResizeObserver(() => {
+          window.requestAnimationFrame(updateFrameHeight);
+        });
+
+        const docElement = doc.documentElement;
+        if (docElement) {
+          resizeObserver.observe(docElement);
+        }
+
+        if (doc.body) {
+          resizeObserver.observe(doc.body);
+        }
+      }
+
+      updateFrameHeight();
+    }
+
+    function handleFrameLoad() {
+      observeFrameContents();
+    }
 
     figureSelect.addEventListener('change', (event) => {
       const nextSrc = event.target.value;
       if (nextSrc && figureFrame.getAttribute('src') !== nextSrc) {
         figureFrame.setAttribute('src', nextSrc);
       }
+    });
+
+    figureFrame.addEventListener('load', handleFrameLoad);
+
+    if (figureFrame.contentDocument?.readyState === 'complete') {
+      handleFrameLoad();
+    }
+
+    window.addEventListener('resize', () => {
+      window.requestAnimationFrame(updateFrameHeight);
     });
   </script>
 </body>
