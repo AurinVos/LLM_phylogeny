@@ -33,6 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA_PATH = REPO_ROOT / "data" / "llm_models.csv"
 DEFAULT_OUTPUT_PATH = REPO_ROOT / "docs" / "interactive_llm_phylogeny.html"
 DEFAULT_SVG_OUTPUT_PATH = REPO_ROOT / "docs" / "interactive_llm_phylogeny.svg"
+DEFAULT_TITLE = "Phylogeny of Transformer Language Models"
 
 
 @dataclass(frozen=True)
@@ -223,7 +224,11 @@ def _prepare_visualisation(
 
 
 def _construct_bokeh_figure(
-    graph: nx.DiGraph, layout: InnovationTimelineLayout, color_map: Dict[str, str]
+    graph: nx.DiGraph,
+    layout: InnovationTimelineLayout,
+    color_map: Dict[str, str],
+    *,
+    title: str = DEFAULT_TITLE,
 ):
     """Create the configured Bokeh figure from prepared components."""
 
@@ -233,7 +238,7 @@ def _construct_bokeh_figure(
         y_axis_type="datetime",
         x_range=layout.x_range,
         y_range=layout.y_range_ms,
-        title="Phylogeny of Transformer Language Models",
+        title=title,
         toolbar_location="above",
     )
     plot.add_tools(PanTool(), WheelZoomTool(), BoxZoomTool(), ResetTool(), TapTool())
@@ -347,11 +352,11 @@ def _construct_bokeh_figure(
     return plot
 
 
-def build_plot(*, data_path: Path | None = None):
+def build_plot(*, data_path: Path | None = None, title: str = DEFAULT_TITLE):
     """Construct the interactive Bokeh plot for the phylogenetic graph."""
 
     _, graph, layout, color_map = _prepare_visualisation(data_path=data_path)
-    return _construct_bokeh_figure(graph, layout, color_map)
+    return _construct_bokeh_figure(graph, layout, color_map, title=title)
 
 
 def export_static_svg(
@@ -359,6 +364,8 @@ def export_static_svg(
     layout: InnovationTimelineLayout,
     color_map: Dict[str, str],
     destination: Path,
+    *,
+    title: str = DEFAULT_TITLE,
 ) -> Path:
     """Render a static SVG version of the phylogeny using Matplotlib."""
 
@@ -418,7 +425,7 @@ def export_static_svg(
 
     subtitle = "Hover in the HTML version to explore innovations"
     ax.set_title(
-        "Phylogeny of Transformer Language Models\n" + subtitle,
+        f"{title}\n" + subtitle,
         fontsize=14,
         pad=18,
     )
@@ -461,16 +468,17 @@ def main(
     *,
     svg_output_path: Path | None = DEFAULT_SVG_OUTPUT_PATH,
     open_browser: bool = False,
+    title: str = DEFAULT_TITLE,
 ) -> Path:
     """Generate the phylogeny plot and write it to an HTML file."""
     _, graph, layout, color_map = _prepare_visualisation(data_path=data_path)
-    plot = _construct_bokeh_figure(graph, layout, color_map)
+    plot = _construct_bokeh_figure(graph, layout, color_map, title=title)
     if output_path is None:
         output_path = DEFAULT_OUTPUT_PATH
-    output_file(str(output_path), title="LLM Phylogeny")
+    output_file(str(output_path), title=title)
     save(plot)
     if svg_output_path is not None:
-        export_static_svg(graph, layout, color_map, svg_output_path)
+        export_static_svg(graph, layout, color_map, svg_output_path, title=title)
     if open_browser:
         show(plot)
     return output_path
@@ -506,6 +514,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Skip exporting the SVG figure (requires matplotlib when enabled).",
     )
+    parser.add_argument(
+        "--title",
+        type=str,
+        default=None,
+        help="Override the title displayed on the generated figure.",
+    )
     args = parser.parse_args()
 
     destination = main(
@@ -513,5 +527,6 @@ if __name__ == "__main__":
         data_path=args.data,
         svg_output_path=None if args.no_svg else args.svg_output,
         open_browser=args.show,
+        title=args.title or DEFAULT_TITLE,
     )
     print(f"Saved interactive phylogeny to {destination}")
