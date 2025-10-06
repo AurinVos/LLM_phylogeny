@@ -19,6 +19,8 @@ from bokeh.models import (
     BoxZoomTool,
     HoverTool,
     Label,
+    Legend,
+    LegendItem,
     PanTool,
     ResetTool,
     TapTool,
@@ -320,11 +322,27 @@ def _construct_bokeh_figure(
     )
     plot.add_layout(subtitle)
 
-    # Add invisible circles for legend entries.
+    # Add invisible circles for legend entries positioned outside the plot area.
+    legend_items: List[LegendItem] = []
     for brand, color in color_map.items():
-        plot.scatter([], [], size=12, color=color, legend_label=brand)
-    plot.legend.location = "top_left"
-    plot.legend.click_policy = "mute"
+        renderer = plot.scatter(
+            [],
+            [],
+            size=12,
+            color=color,
+            muted_color=color,
+            muted_alpha=0.15,
+        )
+        legend_items.append(LegendItem(label=brand, renderers=[renderer]))
+
+    legend = Legend(items=legend_items, title="Model brands")
+    legend.border_line_color = None
+    legend.padding = 8
+    legend.spacing = 4
+    legend.label_text_font_size = "10pt"
+    legend.title_text_font_size = "11pt"
+    legend.click_policy = "mute"
+    plot.add_layout(legend, "right")
 
     return plot
 
@@ -425,11 +443,13 @@ def export_static_svg(
         legend_handles,
         legend_labels,
         title="Model brands",
-        loc="upper left",
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+        borderaxespad=0.0,
         frameon=False,
     )
 
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0, 0.82, 1])
     fig.savefig(destination, format="svg", dpi=150)
     plt.close(fig)
     return destination
