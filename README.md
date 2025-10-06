@@ -3,7 +3,9 @@
 LLM Phylogeny maps how milestone large language models build on one another's
 architectural innovations. The interactive network links each release to the
 ideas it inherits so you can trace the technical lineage that shaped today's
-transformer ecosystem.
+transformer ecosystem. Models appear at the intersection of their
+breakthrough innovation (x-axis) and release timing (y-axis), while colours
+group models by brand for quick visual scanning.
 
 ![Static snapshot of the LLM phylogeny network](docs/interactive_llm_phylogeny.svg)
 
@@ -47,13 +49,15 @@ the graph can be regenerated or extended with new models. Each row contains:
 | column | description |
 | --- | --- |
 | `name` | Model name shown in the network. |
-| `family` | High-level model family used for colour coding. |
-| `release_month` | Month and year of the public release in `DD-MM-YYYY` format. |
-| `innovation` | Key architectural idea associated with the release. |
+| `brand` | Organisation or company responsible for the release. |
+| `family` | High-level model family used for additional grouping. |
+| `release_date` | Public release date in ISO `YYYY-MM-DD` format. |
 | `influences` | Semicolon-separated list of upstream models. |
+| `innovation_category` | Technical innovation category plotted along the x-axis. |
+| `innovation_summary` | Short description of what made the release notable. |
 
-Keep the CSV sorted chronologically by `release_month` so that the generated
-timeline flows naturally from left to right.
+Keep the CSV sorted chronologically by `release_date` so that the generated
+timeline flows naturally from oldest (bottom) to newest (top).
 
 ## Development workflow
 
@@ -70,7 +74,7 @@ clear at a glance:
 - Highlight when novel architectural ideas (Mixture-of-Experts, RLHF, long-context
   attention, etc.) enter the ecosystem.
 - Show how families build on previous work through explicit influence edges.
-- Convey the rapid cadence of releases over time through the horizontal timeline.
+- Convey the rapid cadence of releases over time through the vertical timeline.
 
 Contributions are welcome—feel free to open issues or PRs that add new models,
 refine the taxonomy, or improve the interactivity of the plot.
