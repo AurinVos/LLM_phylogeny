@@ -1,62 +1,55 @@
-name,family,release_month,influences,innovation
-Attention Is All You Need,Root,1-6-2017,,Introduced the Transformer architecture with multi-head self-attention and positional encoding
-GPT-1,GPT,1-6-2018,Attention Is All You Need,Applied decoder-only Transformer with generative pretraining on BooksCorpus
-BERT,Encoder-only,1-10-2018,Attention Is All You Need,Bidirectional encoder pretraining with masked language modelling and next sentence prediction
-GPT-2,GPT,1-2-2019,GPT-1,Scaled decoder-only models with zero-shot transfer via WebText
-Transformer-XL,Long-context,1-1-2019,Attention Is All You Need,Segment-level recurrence and relative positional encoding for long-context modelling
-XLNet,Encoder-only,1-6-2019,Transformer-XL; BERT,Permuted language modelling objective blending autoregressive and autoencoding pretraining
-Megatron-LM,Scaling,1-8-2019,GPT-2,Model parallelism for trillion-parameter scale using tensor and pipeline parallelism
-RoBERTa,Encoder-only,1-7-2019,BERT,"Optimised masked language modelling with longer training, dynamic masking, and larger batches"
-ALBERT,Encoder-only,1-9-2019,BERT,Parameter sharing and factorised embeddings for lightweight bidirectional transformers
-BART,Seq2Seq,1-10-2019,Attention Is All You Need,Denoising autoencoder that bridges encoder-decoder pretraining for text generation
-T5,Seq2Seq,1-10-2019,Attention Is All You Need,Text-to-Text framework with unified transfer learning and span-corruption objective
-ELECTRA,Encoder-only,1-3-2020,BERT,Replaced masked language modelling with discriminator that detects replaced tokens
-GPT-3,GPT,1-5-2020,GPT-2,175B parameter scaling with in-context learning across diverse tasks
-Switch Transformer,Mixture-of-Experts,1-1-2021,T5,Sparse mixture-of-experts routing enabling trillion-parameter efficiency
-LaMDA,Google,1-5-2021,Attention Is All You Need,Dialogue-optimised training with safety fine-tuning and grounded responses
-Gopher,DeepMind/Scaling,1-12-2021,Attention Is All You Need,Scaling laws with retrieval-style evaluation and precision study for large transformers
-GLaM,Mixture-of-Experts,1-12-2021,Switch Transformer,Hierarchical mixture-of-experts with token-level routing across 1.2T parameters
-Chinchilla,DeepMind/Scaling,1-3-2022,Gopher,Data/parameter scaling law balancing showing benefits of more tokens over parameters
-PaLM,Google,1-4-2022,LaMDA,Pathways system with parallelism and chain-of-thought prompting across 540B parameters
-UL2,Seq2Seq,1-5-2022,T5,Mixture-of-denoisers objective supporting multiple corruption schemes for unified learning
-OPT,Open-Source GPT,1-5-2022,GPT-3,Reproducible GPT-3 class model with fully documented training pipeline
-BLOOM,Open-Source GPT,1-7-2022,GPT-3; Megatron-LM,Multilingual open-access 176B parameter model trained collaboratively via Megatron-DeepSpeed
-LLaMA,LLaMA,1-2-2023,Chinchilla,"Efficient scaling via smaller datasets, grouped-query attention, and open research weights"
-GPT-4,GPT,1-3-2023,Chinchilla; GPT-3,Large multimodal alignment with reinforced fine-tuning and tool integration
-InstructGPT,Alignment,1-1-2022,GPT-3,Reinforcement learning from human feedback tailored to instruction following
-Constitutional AI,Alignment,1-12-2022,InstructGPT,Self-critiquing alignment loop guided by explicit normative principles
-Claude 1,Claude,1-3-2023,Constitutional AI,Applied constitutional AI feedback to align helpful and harmless behaviour
-Baichuan-7B,Baichuan,1-6-2023,LLaMA,Chinese-English bilingual adaptation of LLaMA with extended vocabulary
-Claude 2,Claude,1-7-2023,Claude 1,Expanded context and constitutional alignment refinements with tool use
-Llama 2,LLaMA,1-7-2023,LLaMA,Open-weight release with supervised fine-tuning and RLHF safety tuning
-InternLM-7B,InternLM,1-7-2023,LLaMA,Toolkit-oriented Chinese open model with multi-stage pretraining and alignment
-Claude Instant 1.2,Claude,1-8-2023,Claude 1,Latency-optimised Claude variant retaining constitutional safety guarantees
-Qwen 7B,Qwen,1-8-2023,Chinchilla; LLaMA,Chinese-English foundation with rotary embeddings and fine-grained tokeniser
-Mistral 7B,Mistral,1-9-2023,Chinchilla; LLaMA,Sliding window attention and grouped-query attention for efficient small models
-Baichuan2,Baichuan,1-9-2023,Baichuan-7B,Improved bilingual data curation with extended context and tool APIs
-Claude 2.1,Claude,1-11-2023,Claude 2,Higher factual reliability and longer context for enterprise tasks
-Yi-34B,Yi,1-11-2023,Llama 2,Balanced bilingual dataset with progressive context extension
-Mixtral 8x7B,Mistral,1-12-2023,Mistral 7B,Sparse mixture-of-experts combining eight Mistral experts with router training
-InternLM2-7B,InternLM,1-1-2024,InternLM-7B,Iterative distillation with modular tool-using skills and expanded context
-Baichuan3,Baichuan,1-1-2024,Baichuan2,Domain-adaptive pretraining with knowledge-augmented decoding
-Gemini 1.5,Google,1-2-2024,PaLM,Mixture-of-experts multimodal model with million-token context
-Claude 3 Haiku,Claude,1-3-2024,Claude 2.1,Fast multimodal assistant with revised constitutional tuning
-Claude 3 Sonnet,Claude,1-3-2024,Claude 2.1,Mid-tier multimodal reasoning with tool orchestration
-Claude 3 Opus,Claude,1-3-2024,Claude 2.1,Flagship Claude with state-of-the-art reasoning and coding alignment
-Llama 3,LLaMA,1-4-2024,Llama 2,Token-efficient vocabulary and speculatively decoded training mix
-GPT-4o,GPT,1-5-2024,GPT-4,Unified multimodal end-to-end model with real-time streaming latency
-Claude 3.5 Sonnet,Claude,1-6-2024,Claude 3 Sonnet,Improved tool-use reliability and creative reasoning
-Qwen2,Qwen,1-6-2024,Qwen 7B,Data mixture refresh with extended context and reasoning tuning
-Llama 3.1,LLaMA,1-7-2024,Llama 3,Multi-token prediction and improved tool-calling APIs
-DeepSeek-V2.5,DeepSeek,1-9-2024,LLaMA,Sparse mixture-of-experts with hybrid reinforcement learning
-Claude 3.5 Haiku,Claude,1-10-2024,Claude 3 Haiku,Faster multimodal responses with improved grounding
-DeepSeek-V3,DeepSeek,1-12-2024,DeepSeek-V2.5,Unified MoE and dense experts with reinforcement fine-tuning
-Qwen2.5 (Max),Qwen,1-1-2025,Qwen2,Expanded multilingual coverage with large context generalisation
-DeepSeek-R1,DeepSeek,1-1-2025,DeepSeek-V3,Reinforced reasoning with reward models targeting mathematical proofs
-Claude 3.7 Sonnet,Claude,1-2-2025,Claude 3.5 Sonnet,Long-context orchestration and improved agentic behaviours
-Qwen3,Qwen,1-4-2025,Qwen2.5 (Max),Mixture-of-experts scaling with automated reasoning curriculum
-Claude 4 Sonnet,Claude,1-5-2025,Claude 3.7 Sonnet,Structured tool-use planning with autonomous memory
-Claude 4 Opus,Claude,1-5-2025,Claude 3 Opus,Frontier reasoning with multi-agent constitutional guidance
-GPT-5,GPT,1-8-2025,GPT-4o,Next-generation multimodal orchestration with autonomous tool chains
-Claude Opus 4.1,Claude,1-8-2025,Claude 4 Opus,Iterative self-improvement through agentic evaluation loops
-Claude 4.5 Sonnet,Claude,1-9-2025,Claude 4 Sonnet,Hybrid symbolic-neural planning with compressed memory
+name,brand,family,release_date,influences,innovation_category,innovation_summary
+Attention Is All You Need,Google Brain,Transformer,2017-06-12,,Core Transformer,Introduced the Transformer architecture with multi-head self-attention and positional encoding for parallel sequence modelling.
+GPT-1,OpenAI,GPT,2018-06-11,Attention Is All You Need,Decoder-Only Pretraining,Applied decoder-only Transformer pretraining on BooksCorpus to enable zero-shot transfer.
+BERT,Google AI,BERT,2018-10-11,Attention Is All You Need,Bidirectional Encoding,Pretrained bidirectional encoders with masked language modelling and next sentence prediction.
+Transformer-XL,Google/CMU,Transformer-XL,2019-01-09,Attention Is All You Need,Long-Context Modelling,Added segment-level recurrence and relative positional encoding to extend transformer context windows.
+GPT-2,OpenAI,GPT,2019-02-14,GPT-1,Frontier Scaling,Scaled decoder-only transformers on WebText to demonstrate zero-shot language capabilities.
+XLNet,Google/CMU,XLNet,2019-06-19,Transformer-XL; BERT,Permutation Objectives,Blended autoregressive and autoencoding benefits with a permutation language modelling objective.
+RoBERTa,Meta AI,BERT,2019-07-26,BERT,Optimised Masked LM,Optimised masked language modelling with larger batches, dynamic masking, and longer training schedules.
+Megatron-LM,NVIDIA,Megatron,2019-09-24,GPT-2,Scaling Infrastructure,Demonstrated tensor and pipeline model parallelism for training hundred-billion parameter transformers.
+ALBERT,Google/TTI,BERT,2019-09-26,BERT,Parameter Efficiency,Used cross-layer parameter sharing and factorised embeddings to reduce model size without losing accuracy.
+T5,Google Research,T5,2019-10-24,Attention Is All You Need,Text-to-Text Transfer,Unified natural language tasks under a text-to-text paradigm with span corruption pretraining.
+BART,Meta AI,BART,2019-10-25,Attention Is All You Need,Denoising Seq2Seq,Bridged encoder-decoder pretraining with denoising objectives for text generation and comprehension.
+Meena,Google Research,Meena,2020-01-27,Attention Is All You Need,Dialogue Optimisation,Large-scale conversational model trained on social media chats with safety fine-tuning insights.
+ELECTRA,Google Research,ELECTRA,2020-03-30,BERT,Discriminative Pretraining,Replaced masked language modelling with a replaced-token detection discriminator for sample-efficient learning.
+GPT-3,OpenAI,GPT,2020-05-28,GPT-2; Megatron-LM,Frontier Scaling,Scaled GPT models to 175B parameters to highlight in-context learning and emergent capabilities.
+Switch Transformer,Google Research,Switch Transformer,2021-01-11,T5,Sparse MoE Routing,Introduced single-expert routing to scale sparse mixture-of-experts models efficiently.
+LaMDA,Google Research,LaMDA,2021-05-18,T5; Meena,Dialogue Optimisation,Optimised conversational transformers with safety fine-tuning and grounded responses.
+Gopher,DeepMind,Gopher,2021-12-08,Transformer-XL; GPT-3,Data/Compute Scaling,Studied transformer scaling laws with extensive evaluation on long-form knowledge tasks.
+GLaM,Google Research,GLaM,2021-12-13,Switch Transformer,Sparse MoE Routing,Scaled mixture-of-experts with hierarchical token routing across 1.2 trillion parameters.
+InstructGPT,OpenAI,GPT,2022-01-26,GPT-3,Alignment via RLHF,Aligned large language models to follow instructions using reinforcement learning from human feedback.
+Chinchilla,DeepMind,Gopher,2022-03-29,Gopher,Data/Compute Scaling,Showed that more training data with fewer parameters yields better performance at fixed compute budgets.
+PaLM,Google Research,PaLM,2022-04-04,GLaM; Gopher,Frontier Scaling,Leveraged Pathways system and chain-of-thought prompting across 540B parameters.
+UL2,Google Research,UL2,2022-04-12,T5,Text-to-Text Transfer,Used a mixture-of-denoisers objective to support multiple corruption schemes in unified pretraining.
+OPT,Meta AI,OPT,2022-05-03,GPT-3; Megatron-LM,Open Reproduction,Released a reproducible GPT-3 class model with full training logs for open research.
+BLOOM,BigScience,BLOOM,2022-07-12,GPT-3; Megatron-LM,Open Reproduction,Delivered an open multilingual 176B parameter transformer trained collaboratively via Megatron-DeepSpeed.
+ChatGPT,OpenAI,GPT,2022-11-30,InstructGPT,Aligned Assistants,Productised RLHF-aligned GPT-3.5 to deliver instruction-following dialogue through chat interfaces.
+Constitutional AI,Anthropic,Anthropic Alignment,2022-12-15,InstructGPT,Constitutional Alignment,Introduced self-critiquing alignment guided by explicit normative principles instead of human reward models.
+LLaMA,Meta AI,LLaMA,2023-02-24,Chinchilla,Efficient Open Weights,Released efficient foundation models with grouped-query attention and smaller curated datasets.
+GPT-4,OpenAI,GPT,2023-03-14,GPT-3; InstructGPT,Multimodal Foundation,Combined large-scale pretraining with RLHF and tool integration for text and vision capabilities.
+Claude 1,Anthropic,Claude,2023-03-14,Constitutional AI,Constitutional Alignment,Applied constitutional AI techniques to produce a helpful and harmless assistant.
+Baichuan-7B,Baichuan Intelligence,Baichuan,2023-06-15,LLaMA,Bilingual Foundation,Adapted LLaMA-style architecture with bilingual Chinese-English training and expanded vocabulary.
+InternLM-7B,Shanghai AI Lab,InternLM,2023-06-23,LLaMA,Bilingual Foundation,Developed an open Chinese-oriented foundation model with multi-stage pretraining and alignment.
+Claude 2,Anthropic,Claude,2023-07-11,Claude 1,Context Extension,Expanded Claude with longer context windows and improved reasoning benchmarks.
+Llama 2,Meta AI,LLaMA,2023-07-18,LLaMA,Efficient Open Weights,Released open-weight chat and base models with supervised finetuning and RLHF safety alignment.
+Qwen 7B,Alibaba Cloud,Qwen,2023-08-03,Chinchilla; LLaMA,Bilingual Foundation,Combined bilingual tokenisation and rotary embeddings for Chinese-English general models.
+Mistral 7B,Mistral AI,Mistral,2023-09-27,Chinchilla; LLaMA,Efficient Open Weights,Used sliding-window attention and grouped-query attention for efficient small transformers.
+Claude 2.1,Anthropic,Claude,2023-11-21,Claude 2,Enterprise Alignment,Improved factual reliability and tool use for enterprise deployments.
+Yi-34B,01.AI,Yi,2023-11-22,Llama 2,Bilingual Foundation,Balanced bilingual datasets with progressive context extension for large open models.
+Grok-1,xAI,Grok,2023-11-29,Chinchilla; LLaMA,Efficient Open Weights,Released a 314B mixture-of-experts model focused on real-time data and reasoning.
+Mixtral 8x7B,Mistral AI,Mixtral,2023-12-11,Mistral 7B; Switch Transformer,Sparse MoE Routing,Combined eight expert blocks with router training to mix efficiency and quality in open weights.
+Gemini 1.5 Pro,Google DeepMind,Gemini,2024-02-15,PaLM; GLaM,Multimodal Foundation,Delivered multimodal long-context Pathways models with million-token context support.
+Mistral Large,Mistral AI,Mistral,2024-02-26,Mistral 7B; Mixtral 8x7B,Aligned Assistants,Introduced a commercial frontier model with tool use and reasoning orchestration.
+Claude 3 Haiku,Anthropic,Claude,2024-03-04,Claude 2.1,Multimodal Foundation,Fast multimodal Claude tier with updated constitutional training.
+Claude 3 Sonnet,Anthropic,Claude,2024-03-04,Claude 2.1,Multimodal Foundation,Mid-tier Claude model emphasising reasoning and tool orchestration.
+Claude 3 Opus,Anthropic,Claude,2024-03-04,Claude 2.1,Multimodal Foundation,Flagship Claude model targeting state-of-the-art reasoning and coding alignment.
+DBRX,Databricks,DBRX,2024-03-27,Mixtral 8x7B; Mistral 7B,Sparse MoE Routing,Open mixture-of-experts model tuned for enterprise retrieval-augmented workloads.
+Llama 3,Meta AI,LLaMA,2024-04-18,Llama 2,Efficient Open Weights,Introduced token-efficient vocabulary, improved data mixtures, and better safety alignment in open weights.
+Phi-3 Mini,Microsoft Research,Phi,2024-04-23,GPT-4,Parameter Efficiency,Released lightweight instruction-following models distilled from curated synthetic data.
+GPT-4o,OpenAI,GPT,2024-05-13,GPT-4,Multimodal Foundation,Unified audio, vision, and text into a single end-to-end real-time model.
+Qwen2,Alibaba Cloud,Qwen,2024-06-06,Qwen 7B,Bilingual Foundation,Refreshed data mixture with extended context and reasoning-oriented fine-tuning.
+Claude 3.5 Sonnet,Anthropic,Claude,2024-06-20,Claude 3 Sonnet,Tool-Integrated Assistants,Enhanced tool use, code generation, and creative reasoning with artifact workflows.
+Llama 3.1,Meta AI,LLaMA,2024-07-23,Llama 3,Context Extension,Added multi-token prediction, longer contexts, and better tool-calling APIs for open models.
+DeepSeek-V2,DeepSeek,DeepSeek,2024-07-29,Mixtral 8x7B; Qwen 7B,Sparse MoE Routing,Released hybrid dense-sparse mixture with long-context reasoning and open-source weights.
+Qwen2.5,Alibaba Cloud,Qwen,2024-09-25,Qwen2,Bilingual Foundation,Expanded multilingual coverage with enhanced long-context and reasoning curricula.
+Claude 3.5 Haiku,Anthropic,Claude,2024-10-22,Claude 3 Haiku,Tool-Integrated Assistants,Delivered faster multimodal responses with improved memory and planning for lightweight agents.
