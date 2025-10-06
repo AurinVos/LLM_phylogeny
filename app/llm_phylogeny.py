@@ -34,19 +34,24 @@ DEFAULT_SVG_OUTPUT_PATH = REPO_ROOT / "docs" / "interactive_llm_phylogeny.svg"
 
 
 @dataclass(frozen=True)
-class TimelineLayout:
-    """Store node coordinates for both interactive and static outputs."""
+class InnovationTimelineLayout:
+    """Store node coordinates with innovations on x-axis and time on y-axis."""
 
-    families: Tuple[str, ...]
+    innovations: Tuple[str, ...]
     node_positions_ms: Dict[str, tuple[float, float]]
-    node_positions_dt: Dict[str, tuple[dt.datetime, float]]
-    x_range_ms: tuple[float, float]
-    x_range_dt: tuple[dt.datetime, dt.datetime]
+    node_positions_dt: Dict[str, tuple[float, dt.datetime]]
+    x_range: tuple[float, float]
+    y_range_ms: tuple[float, float]
+    y_range_dt: tuple[dt.datetime, dt.datetime]
 
 
 def _parse_date(raw: str) -> dt.datetime:
-    """Convert the input "day-month-year" string into a datetime."""
-    return dt.datetime.strptime(raw, "%d-%m-%Y")
+    """Parse ISO-format dates from the curated dataset."""
+
+    try:
+        return dt.datetime.strptime(raw, "%Y-%m-%d")
+    except ValueError as exc:  # pragma: no cover - surfaced to caller
+        raise ValueError(f"Could not parse release_date '{raw}'") from exc
 
 
 def _load_models_from_csv(data_path: Path | None = None) -> List[Dict[str, object]]:
@@ -58,7 +63,14 @@ def _load_models_from_csv(data_path: Path | None = None) -> List[Dict[str, objec
     models: List[Dict[str, object]] = []
     with data_path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
-        required = {"name", "family", "release_month", "innovation"}
+        required = {
+            "name",
+            "brand",
+            "family",
+            "release_date",
+            "innovation_category",
+            "innovation_summary",
+        }
         missing_columns = required.difference(reader.fieldnames or [])
         if missing_columns:
             missing = ", ".join(sorted(missing_columns))
@@ -78,10 +90,12 @@ def _load_models_from_csv(data_path: Path | None = None) -> List[Dict[str, objec
 
             model = {
                 "name": name,
+                "brand": (row.get("brand") or "Unknown").strip() or "Unknown",
                 "family": (row.get("family") or "Unknown").strip() or "Unknown",
-                "release_month": (row.get("release_month") or "").strip(),
+                "release_date_raw": (row.get("release_date") or "").strip(),
                 "influences": influences,
-                "innovation": (row.get("innovation") or "").strip(),
+                "innovation_category": (row.get("innovation_category") or "").strip(),
+                "innovation_summary": (row.get("innovation_summary") or "").strip(),
             }
             models.append(model)
 
@@ -97,10 +111,12 @@ def _prepare_models(raw_models: Iterable[Dict[str, object]]) -> List[Dict[str, o
     combined: List[Dict[str, object]] = []
     for model in raw_models:
         normalised = dict(model)
-        release_month = str(normalised.get("release_month", "")).strip()
-        if not release_month:
-            raise ValueError(f"Model '{normalised.get('name')}' is missing a release month")
-        release_date = _parse_date(release_month)
+        release_raw = str(normalised.get("release_date_raw", "")).strip()
+        if not release_raw:
+            raise ValueError(
+                f"Model '{normalised.get('name')}' is missing a release_date"
+            )
+        release_date = _parse_date(release_raw)
         normalised["release_date"] = release_date
         normalised["release_label"] = release_date.strftime("%b %Y")
         combined.append(normalised)
@@ -116,82 +132,105 @@ def _build_graph(models: Iterable[Dict[str, object]]) -> nx.DiGraph:
     for model in models:
         for influence in model["influences"]:
             if influence in graph:
-                graph.add_edge(influence, model["name"], innovation=graph.nodes[model["name"]]["innovation"])
+                graph.add_edge(
+                    influence,
+                    model["name"],
+                    innovation_category=model["innovation_category"],
+                    innovation_summary=model["innovation_summary"],
+                )
     return graph
 
 
-def _build_timeline_layout(models: Iterable[Dict[str, object]]) -> TimelineLayout:
-    """Return node coordinates for both Bokeh (ms) and Matplotlib (datetime)."""
-
-    families_sorted = tuple(sorted({model["family"] for model in models}))
-    family_y = {family: index for index, family in enumerate(families_sorted)}
-
-    family_release_offsets: Dict[str, Dict[dt.date, int]] = {}
-    positions_ms: Dict[str, tuple[float, float]] = {}
-    positions_dt: Dict[str, tuple[dt.datetime, float]] = {}
+def _build_innovation_timeline_layout(
+    models: Iterable[Dict[str, object]]
+) -> InnovationTimelineLayout:
+    """Return node coordinates with innovation categories on x and time on y."""
 
     models_list = list(models)
     if not models_list:
         raise ValueError("No models were provided to build the timeline layout")
 
+    innovation_order: List[str] = []
+    seen_innovations = set()
+    for model in models_list:
+        category = model["innovation_category"] or "Unspecified"
+        if category not in seen_innovations:
+            seen_innovations.add(category)
+            innovation_order.append(category)
+
+    innovation_positions = {name: idx for idx, name in enumerate(innovation_order)}
+
+    positions_ms: Dict[str, tuple[float, float]] = {}
+    positions_dt: Dict[str, tuple[float, dt.datetime]] = {}
+    innovation_offsets: Dict[str, Dict[dt.date, int]] = {}
+
     for model in models_list:
         name = str(model["name"])
         release_date: dt.datetime = model["release_date"]
-        family: str = model["family"]
-        family_release_offsets.setdefault(family, {})
-        offsets_for_family = family_release_offsets[family]
+        category = model["innovation_category"] or "Unspecified"
+
+        innovation_offsets.setdefault(category, {})
+        offsets_for_category = innovation_offsets[category]
         base_key = release_date.date()
-        offsets_for_family[base_key] = offsets_for_family.get(base_key, -1) + 1
-        jitter = (offsets_for_family[base_key] % 3) * 0.15
-        x_ms = release_date.timestamp() * 1000.0
-        y = family_y[family] + jitter
-        positions_ms[name] = (x_ms, y)
-        positions_dt[name] = (release_date, y)
+        offsets_for_category[base_key] = offsets_for_category.get(base_key, -1) + 1
+        jitter = (offsets_for_category[base_key] % 3) * 0.18
+
+        x = innovation_positions[category] + jitter
+        y_ms = release_date.timestamp() * 1000.0
+
+        positions_ms[name] = (x, y_ms)
+        positions_dt[name] = (x, release_date)
 
     start_dt = models_list[0]["release_date"] - dt.timedelta(days=60)
     end_dt = models_list[-1]["release_date"] + dt.timedelta(days=60)
-    start_ts = start_dt.timestamp() * 1000.0
-    end_ts = end_dt.timestamp() * 1000.0
+    start_ms = start_dt.timestamp() * 1000.0
+    end_ms = end_dt.timestamp() * 1000.0
 
-    return TimelineLayout(
-        families=families_sorted,
+    padding = 0.6 if innovation_positions else 0.5
+    x_min = -padding
+    x_max = (len(innovation_order) - 1) + padding if innovation_order else padding
+
+    return InnovationTimelineLayout(
+        innovations=tuple(innovation_order),
         node_positions_ms=positions_ms,
         node_positions_dt=positions_dt,
-        x_range_ms=(start_ts, end_ts),
-        x_range_dt=(start_dt, end_dt),
+        x_range=(x_min, x_max),
+        y_range_ms=(start_ms, end_ms),
+        y_range_dt=(start_dt, end_dt),
     )
 
 
 def _prepare_visualisation(
     *, data_path: Path | None = None
-) -> tuple[List[Dict[str, object]], nx.DiGraph, TimelineLayout, Dict[str, str]]:
+) -> tuple[List[Dict[str, object]], nx.DiGraph, InnovationTimelineLayout, Dict[str, str]]:
     """Load the dataset and compute shared artefacts for all outputs."""
 
     raw_models = _load_models_from_csv(data_path=data_path)
     models = _prepare_models(raw_models)
     graph = _build_graph(models)
-    layout = _build_timeline_layout(models)
+    layout = _build_innovation_timeline_layout(models)
 
     palette = Category20[20]
+    brands = tuple(dict.fromkeys(model["brand"] for model in models))
     color_map = {
-        family: palette[index % len(palette)]
-        for index, family in enumerate(layout.families)
+        brand: palette[index % len(palette)]
+        for index, brand in enumerate(brands)
     }
 
     return models, graph, layout, color_map
 
 
 def _construct_bokeh_figure(
-    graph: nx.DiGraph, layout: TimelineLayout, color_map: Dict[str, str]
+    graph: nx.DiGraph, layout: InnovationTimelineLayout, color_map: Dict[str, str]
 ):
     """Create the configured Bokeh figure from prepared components."""
 
     plot = figure(
         width=1200,
         height=800,
-        x_axis_type="datetime",
-        x_range=layout.x_range_ms,
-        y_range=(-1, len(layout.families) + 1),
+        y_axis_type="datetime",
+        x_range=layout.x_range,
+        y_range=layout.y_range_ms,
         title="Phylogeny of Transformer Language Models",
         toolbar_location="above",
     )
@@ -201,21 +240,37 @@ def _construct_bokeh_figure(
 
     node_source = graph_renderer.node_renderer.data_source
     node_source.data["family"] = [graph.nodes[name]["family"] for name in graph.nodes]
+    node_source.data["brand"] = [graph.nodes[name]["brand"] for name in graph.nodes]
     node_source.data["release"] = [graph.nodes[name]["release_label"] for name in graph.nodes]
-    node_source.data["innovation"] = [graph.nodes[name]["innovation"] for name in graph.nodes]
-    node_source.data["color"] = [color_map[graph.nodes[name]["family"]] for name in graph.nodes]
+    node_source.data["innovation_category"] = [
+        graph.nodes[name]["innovation_category"] for name in graph.nodes
+    ]
+    node_source.data["innovation_summary"] = [
+        graph.nodes[name]["innovation_summary"] for name in graph.nodes
+    ]
+    node_source.data["color"] = [
+        color_map[graph.nodes[name]["brand"]] for name in graph.nodes
+    ]
 
     graph_renderer.node_renderer.glyph.size = 18
     graph_renderer.node_renderer.glyph.fill_color = "color"
     graph_renderer.node_renderer.glyph.line_color = "#222222"
 
     edge_source = graph_renderer.edge_renderer.data_source
-    edge_source.data["innovation"] = [
-        graph.nodes[end]["innovation"] for end in edge_source.data["end"]
-    ]
-    edge_source.data["release"] = [
-        graph.nodes[end]["release_label"] for end in edge_source.data["end"]
-    ]
+    starts = edge_source.data.get("start", [])
+    ends = edge_source.data.get("end", [])
+    innovation_categories: List[str] = []
+    innovation_summaries: List[str] = []
+    releases: List[str] = []
+    for start, end in zip(starts, ends):
+        attributes = graph.edges[start, end]
+        innovation_categories.append(attributes.get("innovation_category", ""))
+        innovation_summaries.append(attributes.get("innovation_summary", ""))
+        releases.append(graph.nodes[end]["release_label"])
+
+    edge_source.data["innovation_category"] = innovation_categories
+    edge_source.data["innovation_summary"] = innovation_summaries
+    edge_source.data["release"] = releases
 
     graph_renderer.edge_renderer.glyph.line_alpha = 0.4
     graph_renderer.edge_renderer.glyph.line_width = 2
@@ -225,9 +280,11 @@ def _construct_bokeh_figure(
     node_hover = HoverTool(
         tooltips=[
             ("Model", "@index"),
+            ("Brand", "@brand"),
             ("Family", "@family"),
             ("Released", "@release"),
-            ("Key innovation", "@innovation"),
+            ("Innovation", "@innovation_category"),
+            ("Summary", "@innovation_summary"),
         ],
         renderers=[graph_renderer.node_renderer],
     )
@@ -235,25 +292,27 @@ def _construct_bokeh_figure(
         tooltips=[
             ("Influence", "@start → @end"),
             ("Child release", "@release"),
-            ("Innovation carried forward", "@innovation"),
+            ("Innovation", "@innovation_category"),
+            ("Summary", "@innovation_summary"),
         ],
         renderers=[graph_renderer.edge_renderer],
     )
     plot.add_tools(node_hover, edge_hover)
 
-    # Configure y-axis to display family names.
-    families_sorted = list(layout.families)
-    plot.yaxis.ticker = list(range(len(families_sorted)))
-    plot.yaxis.major_label_overrides = {
-        index: family for index, family in enumerate(families_sorted)
-    }
-    plot.xaxis.axis_label = "Release timeline"
-    plot.yaxis.axis_label = "Model family"
+    # Configure axes labels and tick overrides.
+    innovation_labels = {index: label for index, label in enumerate(layout.innovations)}
+    plot.xaxis.ticker = list(innovation_labels.keys())
+    plot.xaxis.major_label_overrides = innovation_labels
+    plot.xaxis.axis_label = "Technical innovation"
+    plot.yaxis.axis_label = "Release timeline"
 
     # Add a subtitle style label to guide interaction.
+    y_min, y_max = layout.y_range_ms
+    subtitle_y = y_max - 0.05 * (y_max - y_min)
+
     subtitle = Label(
         x=0,
-        y=len(families_sorted) + 0.8,
+        y=subtitle_y,
         x_units="screen",
         y_units="data",
         text="Hover nodes or edges to see innovations. Use scroll to zoom.",
@@ -262,8 +321,8 @@ def _construct_bokeh_figure(
     plot.add_layout(subtitle)
 
     # Add invisible circles for legend entries.
-    for family in families_sorted:
-        plot.scatter([], [], size=12, color=color_map[family], legend_label=family)
+    for brand, color in color_map.items():
+        plot.scatter([], [], size=12, color=color, legend_label=brand)
     plot.legend.location = "top_left"
     plot.legend.click_policy = "mute"
 
@@ -279,7 +338,7 @@ def build_plot(*, data_path: Path | None = None):
 
 def export_static_svg(
     graph: nx.DiGraph,
-    layout: TimelineLayout,
+    layout: InnovationTimelineLayout,
     color_map: Dict[str, str],
     destination: Path,
 ) -> Path:
@@ -312,7 +371,7 @@ def export_static_svg(
         x, y = layout.node_positions_dt[name]
         node_x.append(x)
         node_y.append(y)
-        node_colors.append(color_map[graph.nodes[name]["family"]])
+        node_colors.append(color_map[graph.nodes[name]["brand"]])
 
     ax.scatter(
         node_x,
@@ -324,20 +383,19 @@ def export_static_svg(
         zorder=2,
     )
 
-    ax.set_xlabel("Release timeline")
-    ax.set_ylabel("Model family")
-    ax.set_ylim(-1, len(layout.families) + 1)
-    ax.set_xlim(layout.x_range_dt)
+    ax.set_xlabel("Technical innovation")
+    ax.set_ylabel("Release timeline")
+    ax.set_xlim(layout.x_range)
+    ax.set_ylim(layout.y_range_dt)
 
-    ax.set_yticks(range(len(layout.families)))
-    ax.set_yticklabels(layout.families)
+    ax.set_xticks(range(len(layout.innovations)))
+    ax.set_xticklabels(layout.innovations, rotation=30, ha="right")
 
-    ax.xaxis.set_major_locator(mdates.YearLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-    fig.autofmt_xdate(rotation=30, ha="right")
+    ax.yaxis.set_major_locator(mdates.YearLocator())
+    ax.yaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
 
-    ax.grid(True, axis="x", color="#dddddd", linewidth=0.8, alpha=0.6)
-    ax.grid(False, axis="y")
+    ax.grid(True, axis="y", color="#dddddd", linewidth=0.8, alpha=0.6)
+    ax.grid(False, axis="x")
     ax.set_axisbelow(True)
 
     subtitle = "Hover in the HTML version to explore innovations"
@@ -347,23 +405,26 @@ def export_static_svg(
         pad=18,
     )
 
-    legend_handles = [
-        Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="w",
-            markerfacecolor=color_map[family],
-            markeredgecolor="#222222",
-            markersize=9,
-            linewidth=0,
+    legend_handles = []
+    legend_labels = []
+    for brand, color in color_map.items():
+        legend_handles.append(
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor=color,
+                markeredgecolor="#222222",
+                markersize=9,
+                linewidth=0,
+            )
         )
-        for family in layout.families
-    ]
+        legend_labels.append(brand)
     ax.legend(
         legend_handles,
-        layout.families,
-        title="Model families",
+        legend_labels,
+        title="Model brands",
         loc="upper left",
         frameon=False,
     )
