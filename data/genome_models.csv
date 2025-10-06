@@ -5,7 +5,9 @@ Enformer,DeepMind (Enformer),Enformer,2021-03-04,DNABERT,Long-range Attention,Ex
 GENA-LM,Microsoft Research (GENA-LM),GENA-LM,2021-11-18,DNABERT,Unified Biological LM,"Pretrained a single transformer on DNA, RNA, and protein to share representations across modalities."
 Nucleotide Transformer,Meta AI (Nucleotide Transformer),Nucleotide Transformer,2022-11-29,DNABERT,Evolutionary Scaling,Scaled masked nucleotide models to 2.5B parameters across 1000+ genomes for zero-shot annotation.
 HyenaDNA,Carnegie Mellon University (HyenaDNA),HyenaDNA,2023-04-17,Nucleotide Transformer,Implicit Long Context,Replaced attention with Hyena operators to capture million-token genomic dependencies efficiently.
+DNAGPT,Peking University (DNAGPT),DNAGPT,2023-05-24,DNABERT; Enformer,Genome-to-text Transfer,Extended decoder-only transformers to write genomic regions and descriptions jointly for editing and variant prioritisation.
 GenSLMs,LANL Bioscience (GenSLMs),GenSLMs,2023-06-30,Nucleotide Transformer,Variant Surveillance,Combined mixture-of-experts transformers with sparse attention for pandemic-scale genomic monitoring.
+xTrimoPGLM,Tencent AI Lab (xTrimo),xTrimoPGLM,2023-07-06,GENA-LM; Nucleotide Transformer,Cross-modal Biological LM,Unified DNA and protein language modelling with sparse experts to link regulatory sequences to expressed proteins.
 GeneFormer,Broad Institute (GeneFormer),GeneFormer,2023-07-14,GENA-LM,Single-cell Contextualisation,Adapted foundation models to single-cell expression atlases with masked modelling and perturbation alignment.
 GenomeGPT,University of California Santa Cruz (GenomeGPT),GenomeGPT,2023-10-18,Nucleotide Transformer,Generative Genome Design,Applied autoregressive decoding to design regulatory DNA with controllable motifs.
 EvoGene,Harvard Medical School (EvoGene),EvoGene,2024-05-22,HyenaDNA; GenSLMs,Evolutionary Forecasting,Integrated long-context transformers with diffusion priors to forecast adaptive genomic trajectories.
