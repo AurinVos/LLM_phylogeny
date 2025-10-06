@@ -234,8 +234,9 @@ def _construct_bokeh_figure(
     """Create the configured Bokeh figure from prepared components."""
 
     plot = figure(
-        width=1200,
-        height=800,
+        width=960,
+        height=720,
+        sizing_mode="scale_width",
         y_axis_type="datetime",
         x_range=layout.x_range,
         y_range=layout.y_range_ms,
