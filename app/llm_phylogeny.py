@@ -37,17 +37,19 @@ DEFAULT_SVG_OUTPUT_PATH = REPO_ROOT / "docs" / "interactive_llm_phylogeny.svg"
 DEFAULT_TITLE = "Phylogeny of Transformer Language Models"
 
 TOOLTIP_BOX_STYLE = (
-    "width: 320px; "
+    "width: max-content; "
+    "max-width: min(360px, calc(100vw - 32px)); "
     "white-space: normal; "
     "overflow-wrap: anywhere; "
     "word-break: break-word; "
-    "line-height: 1.25;"
+    "line-height: 1.25; "
+    "box-sizing: border-box;"
 )
 
 NODE_TOOLTIP_TEMPLATE = f"""
 <div style=\"{TOOLTIP_BOX_STYLE}\">
   <div style=\"font-weight: 600; margin-bottom: 4px;\">@index</div>
-  <div><span style=\"font-weight: 600;\">Brand:</span> @brand</div>
+  <div><span style=\"font-weight: 600;\">Brand:</span> @brand_label</div>
   <div><span style=\"font-weight: 600;\">Family:</span> @family</div>
   <div><span style=\"font-weight: 600;\">Released:</span> @release</div>
   <div><span style=\"font-weight: 600;\">Innovation:</span> @innovation_category</div>
@@ -84,6 +86,28 @@ def _parse_date(raw: str) -> dt.datetime:
         return dt.datetime.strptime(raw, "%Y-%m-%d")
     except ValueError as exc:  # pragma: no cover - surfaced to caller
         raise ValueError(f"Could not parse release_date '{raw}'") from exc
+
+
+def _format_brand_label(name: str, brand: str) -> str:
+    """Return a brand label formatted as "Model (Institution)"."""
+
+    clean_name = name.strip()
+    clean_brand = brand.strip()
+    if not clean_name:
+        return clean_brand or "Unknown"
+
+    if not clean_brand or clean_brand.lower() == "unknown":
+        return f"{clean_name} (Unknown)"
+
+    suffix = f" ({clean_name})"
+    if clean_brand.endswith(suffix):
+        clean_brand = clean_brand[: -len(suffix)].rstrip()
+
+    prefix = f"{clean_name} ("
+    if clean_brand.startswith(prefix) and clean_brand.endswith(")"):
+        clean_brand = clean_brand[len(prefix) : -1].strip()
+
+    return f"{clean_name} ({clean_brand})"
 
 
 def _load_models_from_csv(data_path: Path | None = None) -> List[Dict[str, object]]:
@@ -151,6 +175,10 @@ def _prepare_models(raw_models: Iterable[Dict[str, object]]) -> List[Dict[str, o
         release_date = _parse_date(release_raw)
         normalised["release_date"] = release_date
         normalised["release_label"] = release_date.strftime("%b %Y")
+        normalised["brand_label"] = _format_brand_label(
+            str(normalised.get("name", "")),
+            str(normalised.get("brand", "")),
+        )
         combined.append(normalised)
 
     combined.sort(key=lambda item: item["release_date"])
@@ -243,10 +271,12 @@ def _prepare_visualisation(
     layout = _build_innovation_timeline_layout(models)
 
     palette = Category20[20]
-    brands = tuple(dict.fromkeys(model["brand"] for model in models))
+    brand_labels = tuple(
+        dict.fromkeys(model["brand_label"] for model in models)
+    )
     color_map = {
-        brand: palette[index % len(palette)]
-        for index, brand in enumerate(brands)
+        label: palette[index % len(palette)]
+        for index, label in enumerate(brand_labels)
     }
 
     return models, graph, layout, color_map
@@ -282,6 +312,9 @@ def _construct_bokeh_figure(
     node_source = graph_renderer.node_renderer.data_source
     node_source.data["family"] = [graph.nodes[name]["family"] for name in graph.nodes]
     node_source.data["brand"] = [graph.nodes[name]["brand"] for name in graph.nodes]
+    node_source.data["brand_label"] = [
+        graph.nodes[name]["brand_label"] for name in graph.nodes
+    ]
     node_source.data["release"] = [graph.nodes[name]["release_label"] for name in graph.nodes]
     node_source.data["innovation_category"] = [
         graph.nodes[name]["innovation_category"] for name in graph.nodes
@@ -290,7 +323,7 @@ def _construct_bokeh_figure(
         graph.nodes[name]["innovation_summary"] for name in graph.nodes
     ]
     node_source.data["color"] = [
-        color_map[graph.nodes[name]["brand"]] for name in graph.nodes
+        color_map[graph.nodes[name]["brand_label"]] for name in graph.nodes
     ]
 
     graph_renderer.node_renderer.glyph.size = 18
@@ -324,12 +357,15 @@ def _construct_bokeh_figure(
     )
     node_hover.attachment = "horizontal"
     node_hover.show_arrow = False
+    node_hover.point_policy = "follow_mouse"
     edge_hover = HoverTool(
         tooltips=EDGE_TOOLTIP_TEMPLATE,
         renderers=[graph_renderer.edge_renderer],
     )
     edge_hover.attachment = "horizontal"
     edge_hover.show_arrow = False
+    edge_hover.point_policy = "follow_mouse"
+    edge_hover.line_policy = "nearest"
     plot.add_tools(node_hover, edge_hover)
 
     # Configure axes labels and tick overrides.
@@ -361,7 +397,7 @@ def _construct_bokeh_figure(
     legend_items: List[LegendItem] = []
     legend_x = layout.x_range[1] + 0.6
     legend_y_start = layout.y_range_ms[1] + 86_400_000.0  # one day in ms offset
-    for index, (brand, color) in enumerate(color_map.items()):
+    for index, (label, color) in enumerate(color_map.items()):
         legend_renderer = plot.scatter(
             x=[legend_x],
             y=[legend_y_start + index * 86_400_000.0],
@@ -372,7 +408,7 @@ def _construct_bokeh_figure(
             muted_color=color,
             muted_alpha=0.15,
         )
-        legend_items.append(LegendItem(label=brand, renderers=[legend_renderer]))
+        legend_items.append(LegendItem(label=label, renderers=[legend_renderer]))
 
     legend = Legend(items=legend_items, title="Model brands")
     legend.border_line_color = None
@@ -430,7 +466,7 @@ def export_static_svg(
         x, y = layout.node_positions_dt[name]
         node_x.append(x)
         node_y.append(y)
-        node_colors.append(color_map[graph.nodes[name]["brand"]])
+        node_colors.append(color_map[graph.nodes[name]["brand_label"]])
 
     ax.scatter(
         node_x,
@@ -466,7 +502,7 @@ def export_static_svg(
 
     legend_handles = []
     legend_labels = []
-    for brand, color in color_map.items():
+    for label, color in color_map.items():
         legend_handles.append(
             Line2D(
                 [0],
@@ -479,7 +515,7 @@ def export_static_svg(
                 linewidth=0,
             )
         )
-        legend_labels.append(brand)
+        legend_labels.append(label)
     ax.legend(
         legend_handles,
         legend_labels,
