@@ -93,8 +93,9 @@ following the same instructions as the primary chart.
 Protein language models progress from the recurrent UniRep encoder through
 benchmark-driven transformers such as TAPE, towards large-scale masked models
 including ProtBERT and ESM-2. Recent work fuses sequence modelling with
-structure-aware generation, culminating in tools like ESMFold and EvoDiff for
-designing novel proteins.
+structure-aware generation, culminating in tools like ESMFold and EvoDiff, and
+now extends to frontier foundation models such as EvolutionaryScale's Evo 1 and
+Meta's multimodal ESM3 for generative protein design.
 
 ### Genomes
 

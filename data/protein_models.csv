@@ -11,3 +11,5 @@ ESM-2,Meta AI (ESM),ESM,2022-07-12,ESM-1b,Frontier Scaling,Trained up to 15B-par
 ESMFold,Meta AI (ESM),ESM,2022-07-19,ESM-2,Structure-Integrated LM,Combined ESM-2 representations with end-to-end structure prediction to infer 3D folds without multiple sequence alignments.
 EvoDiff,Meta AI & Microsoft Research (EvoDiff),EvoDiff,2023-06-15,ESM-2; ProtT5-XL,Diffusion Protein Generation,Used residue-space diffusion conditioned on protein embeddings to design functional proteins across scaffolds.
 ProGen2,Salesforce Research (ProGen2),ProGen,2023-11-16,ProGen; ProtT5-XL,Controlled Protein Generation,Expanded autoregressive modelling with conditioning tags for structure and function objectives across protein families.
+Evo 1,EvolutionaryScale (Evo 1),Evo,2024-04-30,ESM-2; EvoDiff,Frontier Protein Foundation Model,Scaled a 98B-parameter protein foundation model accessible via APIs for generative and predictive design tasks.
+ESM3,Meta AI (ESM),ESM,2024-06-18,ESM-2; ESMFold,Multimodal Protein LM,Unified sequence-to-structure generation with joint token and coordinate outputs for end-to-end protein design.
