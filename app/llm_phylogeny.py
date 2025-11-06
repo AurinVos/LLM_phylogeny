@@ -36,6 +36,34 @@ DEFAULT_OUTPUT_PATH = REPO_ROOT / "docs" / "interactive_llm_phylogeny.html"
 DEFAULT_SVG_OUTPUT_PATH = REPO_ROOT / "docs" / "interactive_llm_phylogeny.svg"
 DEFAULT_TITLE = "Phylogeny of Transformer Language Models"
 
+TOOLTIP_BOX_STYLE = (
+    "width: 320px; "
+    "white-space: normal; "
+    "overflow-wrap: anywhere; "
+    "word-break: break-word; "
+    "line-height: 1.25;"
+)
+
+NODE_TOOLTIP_TEMPLATE = f"""
+<div style=\"{TOOLTIP_BOX_STYLE}\">
+  <div style=\"font-weight: 600; margin-bottom: 4px;\">@index</div>
+  <div><span style=\"font-weight: 600;\">Brand:</span> @brand</div>
+  <div><span style=\"font-weight: 600;\">Family:</span> @family</div>
+  <div><span style=\"font-weight: 600;\">Released:</span> @release</div>
+  <div><span style=\"font-weight: 600;\">Innovation:</span> @innovation_category</div>
+  <div><span style=\"font-weight: 600;\">Summary:</span> @innovation_summary</div>
+</div>
+"""
+
+EDGE_TOOLTIP_TEMPLATE = f"""
+<div style=\"{TOOLTIP_BOX_STYLE}\">
+  <div style=\"font-weight: 600; margin-bottom: 4px;\">@start → @end</div>
+  <div><span style=\"font-weight: 600;\">Child release:</span> @release</div>
+  <div><span style=\"font-weight: 600;\">Innovation:</span> @innovation_category</div>
+  <div><span style=\"font-weight: 600;\">Summary:</span> @innovation_summary</div>
+</div>
+"""
+
 
 @dataclass(frozen=True)
 class InnovationTimelineLayout:
@@ -291,25 +319,13 @@ def _construct_bokeh_figure(
     plot.renderers.append(graph_renderer)
 
     node_hover = HoverTool(
-        tooltips=[
-            ("Model", "@index"),
-            ("Brand", "@brand"),
-            ("Family", "@family"),
-            ("Released", "@release"),
-            ("Innovation", "@innovation_category"),
-            ("Summary", "@innovation_summary"),
-        ],
+        tooltips=NODE_TOOLTIP_TEMPLATE,
         renderers=[graph_renderer.node_renderer],
     )
     node_hover.attachment = "horizontal"
     node_hover.show_arrow = False
     edge_hover = HoverTool(
-        tooltips=[
-            ("Influence", "@start → @end"),
-            ("Child release", "@release"),
-            ("Innovation", "@innovation_category"),
-            ("Summary", "@innovation_summary"),
-        ],
+        tooltips=EDGE_TOOLTIP_TEMPLATE,
         renderers=[graph_renderer.edge_renderer],
     )
     edge_hover.attachment = "horizontal"
