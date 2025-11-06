@@ -92,9 +92,11 @@ def _load_models_from_csv(data_path: Path | None = None) -> List[Dict[str, objec
                 if part.strip()
             ]
 
+            brand = (row.get("brand") or "Unknown").strip() or "Unknown"
+
             model = {
                 "name": name,
-                "brand": (row.get("brand") or "Unknown").strip() or "Unknown",
+                "brand": brand,
                 "family": (row.get("family") or "Unknown").strip() or "Unknown",
                 "release_date_raw": (row.get("release_date") or "").strip(),
                 "influences": influences,
@@ -123,6 +125,9 @@ def _prepare_models(raw_models: Iterable[Dict[str, object]]) -> List[Dict[str, o
         release_date = _parse_date(release_raw)
         normalised["release_date"] = release_date
         normalised["release_label"] = release_date.strftime("%b %Y")
+        name = str(normalised.get("name", "")).strip()
+        brand = str(normalised.get("brand", "")).strip() or "Unknown"
+        normalised["display_name"] = f"{name} ({brand})"
         combined.append(normalised)
 
     combined.sort(key=lambda item: item["release_date"])
@@ -252,6 +257,9 @@ def _construct_bokeh_figure(
     graph_renderer = from_networkx(graph, layout.node_positions_ms)
 
     node_source = graph_renderer.node_renderer.data_source
+    node_source.data["display_name"] = [
+        graph.nodes[name]["display_name"] for name in graph.nodes
+    ]
     node_source.data["family"] = [graph.nodes[name]["family"] for name in graph.nodes]
     node_source.data["brand"] = [graph.nodes[name]["brand"] for name in graph.nodes]
     node_source.data["release"] = [graph.nodes[name]["release_label"] for name in graph.nodes]
@@ -292,7 +300,7 @@ def _construct_bokeh_figure(
 
     node_hover = HoverTool(
         tooltips=[
-            ("Model", "@index"),
+            ("Model", "@display_name"),
             ("Brand", "@brand"),
             ("Family", "@family"),
             ("Released", "@release"),
