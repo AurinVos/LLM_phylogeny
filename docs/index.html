@@ -122,138 +122,7 @@
     const figureFrame = document.getElementById('figure-frame');
     const MIN_IFRAME_HEIGHT = 560;
     const MAX_IFRAME_HEIGHT = 860;
-    const TOOLTIP_PADDING = 12;
     let resizeObserver = null;
-    let tooltipObserverCleanup = null;
-
-    function clampTooltips(doc) {
-      if (!doc) {
-        return;
-      }
-
-      const { defaultView } = doc;
-      if (!defaultView) {
-        return;
-      }
-
-      const scrollX = defaultView.scrollX;
-      const scrollY = defaultView.scrollY;
-      const viewportWidth = doc.documentElement?.clientWidth || defaultView.innerWidth;
-      const viewportHeight = doc.documentElement?.clientHeight || defaultView.innerHeight;
-
-      const maxLeft = scrollX + viewportWidth - TOOLTIP_PADDING;
-      const maxTop = scrollY + viewportHeight - TOOLTIP_PADDING;
-      const minLeft = scrollX + TOOLTIP_PADDING;
-      const minTop = scrollY + TOOLTIP_PADDING;
-
-      doc.querySelectorAll('.bk-tooltip').forEach((tooltip) => {
-        const style = tooltip.style;
-        let left = parseFloat(style.left || 'NaN');
-        let top = parseFloat(style.top || 'NaN');
-
-        if (!Number.isFinite(left) || !Number.isFinite(top)) {
-          const rect = tooltip.getBoundingClientRect();
-          left = rect.left + scrollX;
-          top = rect.top + scrollY;
-        }
-
-        const width = tooltip.offsetWidth || tooltip.clientWidth;
-        const height = tooltip.offsetHeight || tooltip.clientHeight;
-
-        let nextLeft = left;
-        let nextTop = top;
-
-        if (left + width > maxLeft) {
-          nextLeft = Math.max(minLeft, maxLeft - width);
-        } else if (left < minLeft) {
-          nextLeft = minLeft;
-        }
-
-        if (top + height > maxTop) {
-          nextTop = Math.max(minTop, maxTop - height);
-        } else if (top < minTop) {
-          nextTop = minTop;
-        }
-
-        if (nextLeft !== left) {
-          style.left = `${Math.round(nextLeft)}px`;
-        }
-
-        if (nextTop !== top) {
-          style.top = `${Math.round(nextTop)}px`;
-        }
-      });
-    }
-
-    function ensureDocumentStyles(doc) {
-      if (!doc) {
-        return;
-      }
-
-      const styleId = 'llm-phylogeny-shared-styles';
-      if (doc.getElementById(styleId)) {
-        return;
-      }
-
-      const style = doc.createElement('style');
-      style.id = styleId;
-      style.textContent = `
-        .bk-root {
-          max-width: min(100%, 960px);
-          margin: 0 auto;
-        }
-
-        .bk-tooltip {
-          max-width: min(360px, calc(100vw - 2.5rem));
-          white-space: normal !important;
-          word-break: break-word;
-        }
-      `;
-
-      (doc.head || doc.body || doc.documentElement).appendChild(style);
-    }
-
-    function attachTooltipGuards(doc) {
-      if (!doc) {
-        return;
-      }
-
-      ensureDocumentStyles(doc);
-
-      if (doc.__llmTooltipGuardsApplied) {
-        clampTooltips(doc);
-        return;
-      }
-      doc.__llmTooltipGuardsApplied = true;
-
-      clampTooltips(doc);
-
-      const handler = () => window.requestAnimationFrame(() => clampTooltips(doc));
-      const listenerOptions = { passive: true };
-
-      doc.addEventListener('pointermove', handler, listenerOptions);
-      doc.addEventListener('wheel', handler, listenerOptions);
-      doc.addEventListener('scroll', handler, listenerOptions);
-      doc.defaultView?.addEventListener('resize', handler, listenerOptions);
-
-      tooltipObserverCleanup = () => {
-        doc.removeEventListener('pointermove', handler, listenerOptions);
-        doc.removeEventListener('wheel', handler, listenerOptions);
-        doc.removeEventListener('scroll', handler, listenerOptions);
-        doc.defaultView?.removeEventListener('resize', handler, listenerOptions);
-        delete doc.__llmTooltipGuardsApplied;
-        tooltipObserverCleanup = null;
-      };
-    }
-
-    function setupFrameEnhancements() {
-      const doc = figureFrame.contentDocument;
-      if (!doc) {
-        return;
-      }
-
-      attachTooltipGuards(doc);
-    }
 
     function updateFrameHeight() {
       const doc = figureFrame.contentDocument;
@@ -285,10 +154,6 @@
         resizeObserver = null;
       }
 
-      if (typeof tooltipObserverCleanup === 'function') {
-        tooltipObserverCleanup();
-      }
-
       const doc = figureFrame.contentDocument;
       if (!doc) {
         return;
@@ -310,7 +175,6 @@
       }
 
       updateFrameHeight();
-      setupFrameEnhancements();
     }
 
     function handleFrameLoad() {
@@ -332,7 +196,6 @@
 
     window.addEventListener('resize', () => {
       window.requestAnimationFrame(updateFrameHeight);
-      window.requestAnimationFrame(setupFrameEnhancements);
     });
   </script>
 </body>
