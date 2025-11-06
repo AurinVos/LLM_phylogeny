@@ -235,14 +235,18 @@ def _construct_bokeh_figure(
 
     plot = figure(
         width=960,
-        height=720,
-        sizing_mode="scale_width",
+        height=640,
+        sizing_mode="stretch_width",
         y_axis_type="datetime",
         x_range=layout.x_range,
         y_range=layout.y_range_ms,
         title=title,
         toolbar_location="above",
     )
+    plot.min_border_bottom = 120
+    plot.min_border_left = 80
+    plot.min_border_right = 40
+    plot.min_border_top = 40
     plot.add_tools(PanTool(), WheelZoomTool(), BoxZoomTool(), ResetTool(), TapTool())
 
     graph_renderer = from_networkx(graph, layout.node_positions_ms)
@@ -297,6 +301,8 @@ def _construct_bokeh_figure(
         ],
         renderers=[graph_renderer.node_renderer],
     )
+    node_hover.attachment = "horizontal"
+    node_hover.show_arrow = False
     edge_hover = HoverTool(
         tooltips=[
             ("Influence", "@start → @end"),
@@ -306,6 +312,8 @@ def _construct_bokeh_figure(
         ],
         renderers=[graph_renderer.edge_renderer],
     )
+    edge_hover.attachment = "horizontal"
+    edge_hover.show_arrow = False
     plot.add_tools(node_hover, edge_hover)
 
     # Configure axes labels and tick overrides.
