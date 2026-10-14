@@ -1,339 +1,250 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LLM Phylogeny Figures</title>
-  <style>
-    :root {
-      color-scheme: light dark;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background-color: Canvas;
-      color: CanvasText;
-    }
-
-    body {
-      margin: 0 auto;
-      max-width: min(1100px, calc(100vw - 2rem));
-      padding: 2rem 1rem 3rem;
-      line-height: 1.6;
-    }
-
-    header {
-      margin-bottom: 1.5rem;
-    }
-
-    h1 {
-      margin-bottom: 0.25rem;
-      font-size: clamp(2rem, 5vw, 2.75rem);
-    }
-
-    p {
-      margin-top: 0.5rem;
-      margin-bottom: 1rem;
-      max-width: 70ch;
-    }
-
-    label {
-      display: block;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-    }
-
-    select {
-      font-size: 1rem;
-      padding: 0.5rem;
-      width: 100%;
-      max-width: 22rem;
-      border-radius: 0.375rem;
-      border: 1px solid rgba(0, 0, 0, 0.2);
-    }
-
-    iframe {
-      margin-top: 1.5rem;
-      width: 100%;
-      min-height: 560px;
-      height: clamp(560px, 80vh, 820px);
-      border: 1px solid rgba(0, 0, 0, 0.15);
-      border-radius: 0.5rem;
-      overflow: hidden;
-    }
-
-    noscript {
-      display: block;
-      margin-top: 1.5rem;
-      padding: 1rem;
-      border: 1px solid rgba(0, 0, 0, 0.2);
-      border-radius: 0.5rem;
-      background-color: rgba(0, 0, 0, 0.05);
-    }
-
-    .links {
-      margin-top: 1rem;
-      padding-left: 1.2rem;
-    }
-
-    .links li + li {
-      margin-top: 0.35rem;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="An interactive, source-linked atlas of language-model capabilities, knowledge work and human–AI working patterns.">
+<title>LLMs for knowledge work · LLM Atlas</title>
+<style>
+:root{--bg:#f4f4ef;--paper:#fff;--ink:#20343e;--muted:#626e73;--line:#dce2df;--accent:#197975;--soft:#eaf3ef;--radius:18px;font-family:Inter,"Segoe UI",Arial,sans-serif;color:var(--ink);background:var(--bg);font-synthesis:none}
+*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button,a,input,select{-webkit-tap-highlight-color:transparent}button{cursor:pointer}button:disabled{cursor:default;opacity:.55}a{color:var(--accent);text-underline-offset:3px}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #197975;outline-offset:4px}button{border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);padding:10px 14px;font-weight:600;line-height:1.2}button:hover{background:#edf3ef}button.active,button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:white}.skip{position:absolute;left:10px;top:-80px;z-index:10;background:white;padding:12px}.skip:focus{top:10px}.shell{max-width:1800px;padding:0 34px;margin:auto}header{height:86px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:750;letter-spacing:.12em}.brand svg{width:30px;height:30px}.brand small{font-size:11px;letter-spacing:.03em;color:var(--muted);font-weight:500;display:block;margin-top:5px}.top-actions{display:flex;align-items:center;gap:20px;font-size:13px}.top-actions a{text-decoration:none;color:var(--muted)}.top-actions button{background:transparent}.tabbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0 18px}.tabs{display:flex;gap:5px;background:#e9ece7;padding:5px;border-radius:12px}.tabs button{border:0;background:transparent;font-size:14px;padding:12px 19px;font-weight:600;color:var(--muted)}.tabs button[aria-selected="true"]{background:white;color:var(--ink);box-shadow:0 1px 6px #1d343a12}.exports{display:flex;gap:8px}.exports button{font-size:12px;padding:9px 12px}.filters{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px;min-height:37px}.activities{display:flex;gap:6px;flex-wrap:wrap}.activities button{font-size:12px;border-color:transparent;background:transparent;padding:9px 13px}.activities button[aria-pressed="true"]{background:var(--ink);color:white}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px}.context{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted);white-space:nowrap}select,input{background:white;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:9px 12px;font-size:12px}input[type="search"]{width:240px}.timeline-tools{display:flex;gap:10px;align-items:center}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:20px;align-items:start}.canvas{border:1px solid var(--line);background:var(--paper);border-radius:var(--radius);overflow:hidden;box-shadow:0 4px 24px #20343e04}.figure-wrap{overflow:auto;position:relative}.figure-wrap>svg{width:100%;height:auto;display:block;min-width:820px}.figure-wrap svg [role="button"]{cursor:pointer;outline:none}.figure-wrap svg [role="button"]:hover>.hit,.figure-wrap svg [role="button"]:focus>.hit{stroke:#20343e;stroke-width:2.5}.figure-wrap svg [role="button"]:focus{filter:drop-shadow(0 0 3px #19797599)}.figure-meta{padding:14px 22px;border-top:1px solid #e9ece9;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:15px;line-height:1.5}.figure-meta button{background:none;border:0;padding:0;color:var(--accent);font-size:12px}.inspector{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:25px 24px;position:sticky;top:18px;min-height:420px;overflow-wrap:anywhere}.inspector h2{font-size:25px;letter-spacing:-.025em;line-height:1.16;margin:13px 0 16px;font-weight:650}.inspector h3{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:24px 0 8px}.inspector p{font-size:13px;line-height:1.7;margin:0 0 10px}.inspector .intro{font-size:14px;color:var(--muted);line-height:1.7}.eyebrow{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}.quote{border-left:2px solid var(--accent);padding:9px 0 9px 13px;margin:14px 0;background:linear-gradient(90deg,#eef5f1,white)}.quote p{margin:0}.guard{background:#f4f4ef;border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.65}.mini-tags{display:flex;flex-wrap:wrap;gap:6px;margin:13px 0}.mini-tags button{padding:6px 9px;border-radius:6px;font-size:11px;font-weight:500}.source-link{display:block;font-size:11px;line-height:1.5;margin:10px 0;text-decoration:none}.source-link:hover{text-decoration:underline}.source-link span{color:var(--muted);font-size:10px;display:block;margin-top:3px}.inspector .back{font-size:11px;padding:0;border:0;color:var(--muted);background:transparent}.fact-kind{display:inline-block;border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-size:10px;margin-bottom:6px}.notice{padding:20px 0 23px;font-size:12px;line-height:1.65;display:flex;justify-content:space-between;gap:28px;color:var(--muted)}.notice p{margin:0;max-width:78ch}.notice details{flex-shrink:0}.notice summary{cursor:pointer}.notice details a{display:block;font-size:12px;margin-top:8px}.status{font-size:11px;color:var(--muted);min-height:16px;padding:0 0 16px}.hidden{display:none!important}.sr-only{position:absolute;clip:rect(0,0,0,0);width:1px;height:1px;overflow:hidden;white-space:nowrap}dialog{max-width:780px;width:calc(100% - 36px);max-height:85vh;border:1px solid var(--line);border-radius:18px;color:var(--ink);padding:30px;background:white}dialog::backdrop{background:#20343e66;backdrop-filter:blur(3px)}dialog h2{font-size:26px;letter-spacing:-.025em;margin:0 0 14px}dialog .dialog-head{display:flex;justify-content:space-between;align-items:start;gap:20px}dialog p{font-size:13px;line-height:1.7;color:var(--muted)}dialog ol{padding-left:25px}dialog li{padding:11px 0;border-bottom:1px solid #eef0eb;font-size:13px}dialog li span{display:block;color:var(--muted);font-size:11px;margin-top:6px}.present .shell{max-width:none;padding:0 18px}.present header,.present .filters,.present .inspector,.present .notice,.present .status,.present .figure-meta{display:none}.present .workspace{grid-template-columns:1fr}.present .tabbar{padding:10px 0}.present .figure-wrap>svg{max-height:calc(100vh - 82px);min-width:0}.present .canvas{border:0;border-radius:0}.present{background:white}.present .tabs button{padding:9px 14px;font-size:12px}.present .figure-wrap{overflow:auto}
+@media(max-width:1150px){.shell{padding:0 20px}.workspace{grid-template-columns:minmax(0,1fr)}.inspector{position:static;min-height:0;display:block}.inspector p{max-width:90ch}.inspector h2{font-size:24px}.figure-wrap>svg{min-width:800px}.context label{display:none}.notice{flex-wrap:wrap}.top-actions{gap:12px}.brand small{display:none}}
+@media(max-width:680px){.shell{padding:0 12px}header{height:68px}.top-actions>a{display:none}.brand{font-size:13px}.tabbar{align-items:start;gap:10px;flex-wrap:wrap;padding:14px 0}.tabs{width:100%;gap:0}.tabs button{flex:1;padding:11px 6px;font-size:12px}.exports{margin-left:auto}.filters{align-items:flex-start;flex-wrap:wrap}.activities{gap:2px}.activities button{font-size:11px;padding:8px}.context{margin-left:auto}.timeline-tools{flex-wrap:wrap}input[type="search"]{width:200px}.workspace{gap:12px}.figure-meta{padding:12px;flex-wrap:wrap}.inspector{padding:20px}.notice details{flex-shrink:1}.present .tabs{width:auto;flex:1}.present .tabbar{flex-wrap:nowrap}.present .exports button:not(#present){display:none}.present .figure-wrap>svg{min-width:800px;max-height:none}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+@media print{header,.tabbar,.filters,.notice,.inspector,.figure-meta,.status{display:none!important}.shell{padding:0}.workspace{display:block}.canvas{border:0;box-shadow:none}.figure-wrap{overflow:visible}.figure-wrap>svg{min-width:0;width:100%}body{background:white}}
+</style>
 </head>
 <body>
-  <header>
-    <h1>LLM Phylogeny Figures</h1>
-    <p>
-      Use the selector below to browse the available LLM phylogeny visualisations.
-      The figures will load inline on this page. If you prefer, you can also open
-      each figure in a dedicated tab using the quick links provided.
-    </p>
-  </header>
-
-  <section>
-    <label for="figure-select">Choose a figure to view:</label>
-    <select id="figure-select" aria-label="LLM phylogeny figure selector">
-      <option value="interactive_llm_phylogeny.html">Interactive LLM Phylogeny</option>
-      <option value="genome_llm_phylogeny.html">Genome LLM Phylogeny</option>
-      <option value="protein_llm_phylogeny.html">Protein LLM Phylogeny</option>
-      <option value="small_molecule_llm_phylogeny.html">Small Molecule LLM Phylogeny</option>
-    </select>
-
-    <iframe
-      id="figure-frame"
-      title="Selected LLM phylogeny figure"
-      src="interactive_llm_phylogeny.html"
-      loading="lazy"
-    ></iframe>
-
-    <noscript>
-      JavaScript is required to show the figures on this page. Use the links below to
-      open each figure individually.
-    </noscript>
-
-    <ul class="links">
-      <li><a href="interactive_llm_phylogeny.html">Interactive LLM Phylogeny</a></li>
-      <li><a href="genome_llm_phylogeny.html">Genome LLM Phylogeny</a></li>
-      <li><a href="protein_llm_phylogeny.html">Protein LLM Phylogeny</a></li>
-      <li><a href="small_molecule_llm_phylogeny.html">Small Molecule LLM Phylogeny</a></li>
-    </ul>
-  </section>
-
-  <script>
-    const figureSelect = document.getElementById('figure-select');
-    const figureFrame = document.getElementById('figure-frame');
-    const MIN_IFRAME_HEIGHT = 560;
-    const MAX_IFRAME_HEIGHT = 860;
-    const TOOLTIP_PADDING = 12;
-    let resizeObserver = null;
-    let tooltipObserverCleanup = null;
-
-    function clampTooltips(doc) {
-      if (!doc) {
-        return;
-      }
-
-      const { defaultView } = doc;
-      if (!defaultView) {
-        return;
-      }
-
-      const scrollX = defaultView.scrollX;
-      const scrollY = defaultView.scrollY;
-      const viewportWidth = doc.documentElement?.clientWidth || defaultView.innerWidth;
-      const viewportHeight = doc.documentElement?.clientHeight || defaultView.innerHeight;
-
-      const maxLeft = scrollX + viewportWidth - TOOLTIP_PADDING;
-      const maxTop = scrollY + viewportHeight - TOOLTIP_PADDING;
-      const minLeft = scrollX + TOOLTIP_PADDING;
-      const minTop = scrollY + TOOLTIP_PADDING;
-
-      doc.querySelectorAll('.bk-tooltip').forEach((tooltip) => {
-        const style = tooltip.style;
-        let left = parseFloat(style.left || 'NaN');
-        let top = parseFloat(style.top || 'NaN');
-
-        if (!Number.isFinite(left) || !Number.isFinite(top)) {
-          const rect = tooltip.getBoundingClientRect();
-          left = rect.left + scrollX;
-          top = rect.top + scrollY;
-        }
-
-        const width = tooltip.offsetWidth || tooltip.clientWidth;
-        const height = tooltip.offsetHeight || tooltip.clientHeight;
-
-        let nextLeft = left;
-        let nextTop = top;
-
-        if (left + width > maxLeft) {
-          nextLeft = Math.max(minLeft, maxLeft - width);
-        } else if (left < minLeft) {
-          nextLeft = minLeft;
-        }
-
-        if (top + height > maxTop) {
-          nextTop = Math.max(minTop, maxTop - height);
-        } else if (top < minTop) {
-          nextTop = minTop;
-        }
-
-        if (nextLeft !== left) {
-          style.left = `${Math.round(nextLeft)}px`;
-        }
-
-        if (nextTop !== top) {
-          style.top = `${Math.round(nextTop)}px`;
-        }
-      });
-    }
-
-    function ensureDocumentStyles(doc) {
-      if (!doc) {
-        return;
-      }
-
-      const styleId = 'llm-phylogeny-shared-styles';
-      if (doc.getElementById(styleId)) {
-        return;
-      }
-
-      const style = doc.createElement('style');
-      style.id = styleId;
-      style.textContent = `
-        .bk-root {
-          max-width: min(100%, 960px);
-          margin: 0 auto;
-        }
-
-        .bk-tooltip {
-          max-width: min(360px, calc(100vw - 2.5rem));
-          white-space: normal !important;
-          word-break: break-word;
-        }
-      `;
-
-      (doc.head || doc.body || doc.documentElement).appendChild(style);
-    }
-
-    function attachTooltipGuards(doc) {
-      if (!doc) {
-        return;
-      }
-
-      ensureDocumentStyles(doc);
-
-      if (doc.__llmTooltipGuardsApplied) {
-        clampTooltips(doc);
-        return;
-      }
-      doc.__llmTooltipGuardsApplied = true;
-
-      clampTooltips(doc);
-
-      const handler = () => window.requestAnimationFrame(() => clampTooltips(doc));
-      const listenerOptions = { passive: true };
-
-      doc.addEventListener('pointermove', handler, listenerOptions);
-      doc.addEventListener('wheel', handler, listenerOptions);
-      doc.addEventListener('scroll', handler, listenerOptions);
-      doc.defaultView?.addEventListener('resize', handler, listenerOptions);
-
-      tooltipObserverCleanup = () => {
-        doc.removeEventListener('pointermove', handler, listenerOptions);
-        doc.removeEventListener('wheel', handler, listenerOptions);
-        doc.removeEventListener('scroll', handler, listenerOptions);
-        doc.defaultView?.removeEventListener('resize', handler, listenerOptions);
-        delete doc.__llmTooltipGuardsApplied;
-        tooltipObserverCleanup = null;
-      };
-    }
-
-    function setupFrameEnhancements() {
-      const doc = figureFrame.contentDocument;
-      if (!doc) {
-        return;
-      }
-
-      attachTooltipGuards(doc);
-    }
-
-    function updateFrameHeight() {
-      const doc = figureFrame.contentDocument;
-      if (!doc) {
-        return;
-      }
-
-      const docElement = doc.documentElement;
-      const body = doc.body;
-      const contentHeight = Math.max(
-        docElement?.scrollHeight || 0,
-        docElement?.offsetHeight || 0,
-        body?.scrollHeight || 0,
-        body?.offsetHeight || 0,
-      );
-
-      const viewportLimit = Math.max(window.innerHeight - 140, MIN_IFRAME_HEIGHT);
-      const nextHeight = Math.max(
-        MIN_IFRAME_HEIGHT,
-        Math.min(contentHeight || MIN_IFRAME_HEIGHT, MAX_IFRAME_HEIGHT, viewportLimit),
-      );
-
-      figureFrame.style.height = `${Math.round(nextHeight)}px`;
-    }
-
-    function observeFrameContents() {
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-        resizeObserver = null;
-      }
-
-      if (typeof tooltipObserverCleanup === 'function') {
-        tooltipObserverCleanup();
-      }
-
-      const doc = figureFrame.contentDocument;
-      if (!doc) {
-        return;
-      }
-
-      if (typeof ResizeObserver === 'function') {
-        resizeObserver = new ResizeObserver(() => {
-          window.requestAnimationFrame(updateFrameHeight);
-        });
-
-        const docElement = doc.documentElement;
-        if (docElement) {
-          resizeObserver.observe(docElement);
-        }
-
-        if (doc.body) {
-          resizeObserver.observe(doc.body);
-        }
-      }
-
-      updateFrameHeight();
-      setupFrameEnhancements();
-    }
-
-    function handleFrameLoad() {
-      observeFrameContents();
-    }
-
-    figureSelect.addEventListener('change', (event) => {
-      const nextSrc = event.target.value;
-      if (nextSrc && figureFrame.getAttribute('src') !== nextSrc) {
-        figureFrame.setAttribute('src', nextSrc);
-      }
-    });
-
-    figureFrame.addEventListener('load', handleFrameLoad);
-
-    if (figureFrame.contentDocument?.readyState === 'complete') {
-      handleFrameLoad();
-    }
-
-    window.addEventListener('resize', () => {
-      window.requestAnimationFrame(updateFrameHeight);
-      window.requestAnimationFrame(setupFrameEnhancements);
-    });
-  </script>
+<a class="skip" href="#main">Skip to visualization</a>
+<div class="shell">
+<header>
+<div class="brand"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="M5 24V15Q5 10 10 10H23M5 17Q13 17 15 22H23M11 10Q14 5 23 5" fill="none" stroke="#197975" stroke-width="2"/><circle cx="24" cy="5" r="3" fill="#5269af"/><circle cx="24" cy="10" r="3" fill="#197975"/><circle cx="24" cy="22" r="3" fill="#88599c"/><circle cx="5" cy="25" r="3" fill="#20343e"/></svg><div>LLM ATLAS<small>From the LLM_phylogeny project</small></div></div>
+<div class="top-actions"><a href="https://github.com/AurinVos/LLM_phylogeny" target="_blank" rel="noopener noreferrer">Repository ↗</a><button id="sources-open">Sources & scope</button></div>
+</header>
+<div class="tabbar">
+<div class="tabs" role="tablist" aria-label="Atlas views"><button id="tab-map" role="tab" aria-controls="main" aria-selected="true" data-view="map">Capability map</button><button id="tab-history" role="tab" aria-controls="main" aria-selected="false" data-view="history">Milestones</button><button id="tab-patterns" role="tab" aria-controls="main" aria-selected="false" data-view="patterns">Working patterns</button></div>
+<div class="exports"><button id="export-svg" aria-label="Download current diagram as editable SVG">SVG ↓</button><button id="export-png" aria-label="Download current diagram as high-resolution PNG">PNG ↓</button><button id="present" aria-pressed="false" title="Presentation view (F)">Present ⛶</button></div>
+</div>
+<div class="filters">
+<div class="activities" id="activity-filters" aria-label="Filter by knowledge activity"></div>
+<div class="timeline-tools hidden" id="timeline-tools"><label class="sr-only" for="search">Search milestones</label><input id="search" type="search" placeholder="Search milestones…"><label class="sr-only" for="kind">Milestone type</label><select id="kind"><option value="all">All types</option><option value="model">Models</option><option value="method">Methods</option><option value="product">Products</option><option value="protocol">Protocols</option><option value="system">Systems</option></select></div>
+<div class="context" id="context-control"><label for="context">Examples</label><select id="context"><option value="scientific">Scientific research</option><option value="general">General knowledge work</option></select></div>
+</div>
+<h1 class="sr-only">LLMs for knowledge work</h1>
+<main id="main" class="workspace" role="tabpanel" aria-labelledby="tab-map" tabindex="-1">
+<section class="canvas" aria-label="Interactive visualization"><div id="figure" class="figure-wrap"></div><div class="figure-meta"><span id="figure-note"></span><button id="reset">Reset view ↺</button></div></section>
+<aside class="inspector" id="inspector" aria-label="Selected item details"></aside>
+</main>
+<div class="notice"><p>The map is an editorial guide to overlapping activities—not a mandatory pipeline, a ranking, or a literal ancestry tree. Historical models and products are examples, not current recommendations.</p><details><summary>Original phylogenies</summary><a href="https://github.com/AurinVos/LLM_phylogeny/blob/main/docs/interactive_llm_phylogeny.html" target="_blank" rel="noopener noreferrer">General LLMs ↗</a><a href="https://github.com/AurinVos/LLM_phylogeny/blob/main/docs/protein_llm_phylogeny.html" target="_blank" rel="noopener noreferrer">Proteins ↗</a><a href="https://github.com/AurinVos/LLM_phylogeny/blob/main/docs/genome_llm_phylogeny.html" target="_blank" rel="noopener noreferrer">Genomes ↗</a><a href="https://github.com/AurinVos/LLM_phylogeny/blob/main/docs/small_molecule_llm_phylogeny.html" target="_blank" rel="noopener noreferrer">Small molecules ↗</a></details></div>
+<div id="status" class="status" role="status" aria-live="polite"></div>
+</div>
+<dialog id="sources-dialog" aria-labelledby="sources-title"><div class="dialog-head"><h2 id="sources-title">Sources & scope</h2><button id="sources-close" autofocus>Close</button></div><p id="scope-text"></p><p>Dates refer to the stated paper submission, announcement or engineering publication—not necessarily invention, first availability or release. The capability-to-activity mappings and example questions are editorial interpretations. Sources substantiate the technical anchors, not measured performance on these examples.</p><ol id="source-list"></ol></dialog>
+<noscript><p style="padding:30px">This atlas needs JavaScript for interaction. The downloadable SVG and PNG versions can be viewed without JavaScript.</p></noscript>
+<script id="atlas-data" type="application/json">{
+  "schema_version": 1,
+  "reviewed": "2026-10-14",
+  "coverage_end": "2025-09-29",
+  "scope": "A selective history and an editorial capability map, not a model leaderboard, exhaustive release catalogue, or verified ancestry tree.",
+  "sources": [
+    {"id": "transformer","title": "Attention Is All You Need","url": "https://arxiv.org/abs/1706.03762","date": "2017-06-12","author": "Vaswani et al."},
+    {"id": "bert","title": "BERT: Pre-training of Deep Bidirectional Transformers","url": "https://arxiv.org/abs/1810.04805","date": "2018-10-11","author": "Devlin et al."},
+    {"id": "gpt3","title": "Language Models are Few-Shot Learners","url": "https://arxiv.org/abs/2005.14165","date": "2020-05-28","author": "Brown et al."},
+    {"id": "rag","title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks","url": "https://arxiv.org/abs/2005.11401","date": "2020-05-22","author": "Lewis et al."},
+    {"id": "codex","title": "Evaluating Large Language Models Trained on Code","url": "https://arxiv.org/abs/2107.03374","date": "2021-07-07","author": "Chen et al."},
+    {"id": "instruct","title": "Training language models to follow instructions with human feedback","url": "https://arxiv.org/abs/2203.02155","date": "2022-03-04","author": "Ouyang et al."},
+    {"id": "react","title": "ReAct: Synergizing Reasoning and Acting in Language Models","url": "https://arxiv.org/abs/2210.03629","date": "2022-10-06","author": "Yao et al."},
+    {"id": "chatgpt","title": "Introducing ChatGPT","url": "https://openai.com/index/chatgpt/","date": "2022-11-30","author": "OpenAI"},
+    {"id": "gpt4","title": "GPT-4 Technical Report","url": "https://arxiv.org/abs/2303.08774","date": "2023-03-15","author": "OpenAI"},
+    {"id": "gemini","title": "Our next-generation model: Gemini 1.5","url": "https://blog.google/innovation-and-ai/products/google-gemini-next-generation-model-february-2024/","date": "2024-02-15","author": "Google"},
+    {"id": "o1","title": "Introducing OpenAI o1-preview","url": "https://openai.com/index/introducing-openai-o1-preview/","date": "2024-09-12","author": "OpenAI"},
+    {"id": "mcp","title": "Introducing the Model Context Protocol","url": "https://www.anthropic.com/news/model-context-protocol","date": "2024-11-25","author": "Anthropic"},
+    {"id": "agents","title": "Building effective agents","url": "https://www.anthropic.com/engineering/building-effective-agents","date": "2024-12-19","author": "Anthropic"},
+    {"id": "research","title": "Introducing deep research","url": "https://openai.com/index/introducing-deep-research/","date": "2025-02-02","author": "OpenAI"},
+    {"id": "multi","title": "How we built our multi-agent research system","url": "https://www.anthropic.com/engineering/multi-agent-research-system","date": "2025-06-13","author": "Anthropic"},
+    {"id": "context","title": "Effective context engineering for AI agents","url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents","date": "2025-09-29","author": "Anthropic"}
+  ],
+  "milestones": [
+    {"id": "transformer","title": "Transformer","lane": "language","kind": "method","date": "2017-06-12","date_type": "Paper submission","change": "Attention-based sequence modelling provided an architecture for subsequent language models.","limit": "An architecture, not a ready-to-use research assistant. No cross-company ancestry is asserted here.","activities": ["understand","create","communicate"],"sources": ["transformer"]},
+    {"id": "bert","title": "BERT","lane": "language","kind": "model","date": "2018-10-11","date_type": "Paper submission","change": "Bidirectional pretraining supported task-adapted language understanding.","limit": "An encoder model; it is not a conversational, generative assistant.","activities": ["find","understand","evaluate"],"sources": ["bert"]},
+    {"id": "rag","title": "Retrieval + generation","lane": "evidence","kind": "method","date": "2020-05-22","date_type": "Paper submission","change": "The RAG paper coupled a generator to retrieved documents for knowledge-intensive tasks.","limit": "Retrieval can miss evidence. A retrieved passage does not automatically substantiate a generated claim.","activities": ["find","understand","evaluate"],"sources": ["rag"]},
+    {"id": "gpt3","title": "GPT-3","lane": "language","kind": "model","date": "2020-05-28","date_type": "Paper submission","change": "Large-scale pretraining demonstrated broad few-shot task performance from examples in the prompt.","limit": "Prompted performance does not establish reliable domain expertise or a verified knowledge base.","activities": ["understand","create","communicate"],"sources": ["gpt3"]},
+    {"id": "codex","title": "Codex (2021)","lane": "language","kind": "model","date": "2021-07-07","date_type": "Paper submission","change": "Code-specialized language modelling connected natural-language descriptions to generated programs.","limit": "This is the 2021 model, not the later coding-agent product. Generated programs still need execution and testing.","activities": ["analyze","create"],"sources": ["codex"]},
+    {"id": "instruct","title": "InstructGPT","lane": "language","kind": "model","date": "2022-03-04","date_type": "Paper submission","change": "Supervised instruction tuning and human-feedback training improved following user intent.","limit": "Following instructions and being preferred by raters are not guarantees of factual correctness. The date is the paper submission, not the earlier announcement.","activities": ["understand","create","communicate"],"sources": ["instruct"]},
+    {"id": "react","title": "ReAct","lane": "coordination","kind": "method","date": "2022-10-06","date_type": "Paper submission","change": "Interleaving reasoning and actions made tool feedback part of the next-step decision.","limit": "A research pattern, not evidence that agents are reliable on every open-ended task.","activities": ["find","analyze","evaluate"],"sources": ["react"]},
+    {"id": "chatgpt","title": "ChatGPT","lane": "language","kind": "product","date": "2022-11-30","date_type": "Product announcement","change": "A conversational interface made iterative instruction-following accessible through dialogue.","limit": "A product interface, not a new architecture or a guarantee of persistent memory.","activities": ["understand","create","communicate"],"sources": ["chatgpt"]},
+    {"id": "gpt4","title": "GPT-4 report","lane": "language","kind": "model","date": "2023-03-15","date_type": "Paper submission","change": "A large multimodal model accepted image and text inputs and produced text outputs.","limit": "The date marks the report, not the product launch. Image understanding and output correctness remain task-dependent.","activities": ["understand","analyze","communicate"],"sources": ["gpt4"]},
+    {"id": "gemini","title": "Gemini 1.5","lane": "language","kind": "model","date": "2024-02-15","date_type": "Model announcement","change": "Long-context, multimodal processing increased the amount and variety of material available in one context.","limit": "Context capacity is not the same as retrieving or using every relevant detail correctly. Historical announcement, not current product advice.","activities": ["understand","analyze"],"sources": ["gemini"]},
+    {"id": "o1","title": "o1-preview","lane": "reasoning","kind": "model","date": "2024-09-12","date_type": "Model announcement","change": "Reasoning-oriented training and additional inference-time computation targeted harder problems.","limit": "More inference computation does not prove an answer. This is a historical milestone, not a recommendation to use this retired preview.","activities": ["analyze","create","evaluate"],"sources": ["o1"]},
+    {"id": "mcp","title": "MCP","lane": "tools","kind": "protocol","date": "2024-11-25","date_type": "Protocol announcement","change": "A shared protocol connected assistants with data sources and tools.","limit": "A protocol does not itself provide autonomy, model intelligence, or safe permissions.","activities": ["find","analyze","create"],"sources": ["mcp"]},
+    {"id": "agents","title": "Workflow / agent patterns","lane": "coordination","kind": "method","date": "2024-12-19","date_type": "Engineering publication","change": "A practical distinction separated predefined code paths from model-directed tool-use loops.","limit": "These patterns can coexist. More autonomy is not inherently more useful or safer.","activities": ["find","analyze","create","evaluate"],"sources": ["agents"]},
+    {"id": "research","title": "Deep research","lane": "evidence","kind": "product","date": "2025-02-02","date_type": "Product announcement","change": "An agentic research feature combined iterative web investigation with synthesis of a sourced report.","limit": "Sources and synthesized claims require checking; a long report is not necessarily comprehensive. This date is the original announcement.","activities": ["find","understand","evaluate","communicate"],"sources": ["research"]},
+    {"id": "multi","title": "Multi-agent research","lane": "coordination","kind": "system","date": "2025-06-13","date_type": "Engineering publication","change": "A published research-system design described a lead agent coordinating parallel research agents.","limit": "Coordination brings cost and integration overhead. Multiple agents are not automatically independent reviewers.","activities": ["find","understand","evaluate"],"sources": ["multi"]},
+    {"id": "context","title": "Context engineering","lane": "evidence","kind": "method","date": "2025-09-29","date_type": "Engineering publication","change": "A published engineering account emphasized selecting and maintaining useful context during longer tasks.","limit": "This is a publication milestone, not the invention date of memory or context management. Stored state is not automatically verified knowledge.","activities": ["find","understand","analyze","create","evaluate","communicate"],"sources": ["context"]}
+  ],
+  "capabilities": [
+    {"id": "search","title": "Search & browse","kind": "system","description": "Search tools bring external documents into a working session. The model can help formulate queries and inspect results.","limit": "Discovery is not coverage: record the search scope and check the underlying source.","sources": ["react","research"]},
+    {"id": "retrieval","title": "Retrieved evidence","kind": "system","description": "A retrieval layer supplies selected passages from a document collection to a model.","limit": "A citation must support the particular claim, not merely mention the subject.","sources": ["rag"]},
+    {"id": "longcontext","title": "Long context","kind": "model","description": "A larger context window lets a model consider more supplied material in one call.","limit": "Long context is finite and does not guarantee attention to every detail. It is not persistent memory.","sources": ["gemini"]},
+    {"id": "multimodal","title": "Multimodal input","kind": "model","description": "Compatible models accept inputs such as text and images, rather than text alone.","limit": "Modality support depends on the model. Verify numbers, labels and fine visual details against the original.","sources": ["gpt4","gemini"]},
+    {"id": "reasoning","title": "Reasoning","kind": "model","description": "Reasoning-oriented models can spend additional inference computation working through a problem.","limit": "A plausible explanation or reasoning trace is not a correctness proof.","sources": ["o1"]},
+    {"id": "execution","title": "Code execution","kind": "system","description": "An execution environment runs generated code against real data and returns results to the system.","limit": "Use suitable methods, restricted permissions, reproducible code and independent checks.","sources": ["research","agents"]},
+    {"id": "generation","title": "Generation","kind": "model","description": "A generative language model proposes or transforms text and code in response to its context.","limit": "Plausibility is not truth, novelty, or experimental validation.","sources": ["gpt3","instruct","codex"]},
+    {"id": "connectors","title": "Tools & connectors","kind": "system","description": "Tool interfaces let a system inspect or modify external artifacts within granted permissions.","limit": "Drafting an action and authorizing an external change should remain separate.","sources": ["mcp","agents"]},
+    {"id": "verification","title": "Independent checks","kind": "check","description": "Use source inspection, deterministic tests or expert review that can contradict the model output.","limit": "A second model repeating the first model is not, by itself, independent verification. This is a design recommendation.","sources": ["agents","multi"]},
+    {"id": "artifacts","title": "Editable artifacts","kind": "system","description": "A surrounding application turns model output into documents, figures, tables or other working files.","limit": "Inspect the actual artifact: calculations, citations and visual encodings can introduce errors. This is an illustrative application pattern.","sources": ["agents","research"]}
+  ],
+  "activities": [
+    {"id": "find","title": "Find","color": "#197975","capabilities": ["search","retrieval"],"scientific": "Evidence table","general": "Source brief","description": "Locate and organize relevant information.","prompt_scientific": "Find experimentally supported enzyme-function claims and record the source for each.","prompt_general": "Compare evidence for a decision and record where each claim comes from.","output": "An evidence table with references and unresolved gaps.","human_check": "Search coverage, primary-source provenance and support for each claim."},
+    {"id": "understand","title": "Understand","color": "#5269af","capabilities": ["longcontext","multimodal"],"scientific": "Mechanism summary","general": "Concept map","description": "Explain concepts and connect evidence across material.","prompt_scientific": "Compare proposed catalytic mechanisms across papers, including their figures.","prompt_general": "Explain an unfamiliar field and show where the sources agree or disagree.","output": "An explanation that distinguishes observations from interpretation.","human_check": "Definitions, figure details, uncertainty and incompatible source assumptions."},
+    {"id": "analyze","title": "Analyze","color": "#946332","capabilities": ["reasoning","execution"],"scientific": "Reproducible analysis","general": "Data analysis","description": "Work with data, assumptions and alternative explanations.","prompt_scientific": "Inspect an assay dataset, run the analysis and preserve the code and assumptions.","prompt_general": "Analyze a dataset and test whether the conclusion depends on modelling choices.","output": "Results linked to executable analysis, inputs and diagnostics.","human_check": "Methods, units, data leakage, uncertainty and reproducibility."},
+    {"id": "create","title": "Create","color": "#88599c","capabilities": ["generation","connectors"],"scientific": "Hypotheses & plans","general": "Drafts & plans","description": "Develop candidate explanations, designs or work products.","prompt_scientific": "Draft competing hypotheses and a plan that could distinguish between them.","prompt_general": "Develop alternative proposals or a first draft under explicit constraints.","output": "A draft or set of alternatives, with assumptions made explicit.","human_check": "Feasibility, originality, unsupported claims and the need for external validation."},
+    {"id": "evaluate","title": "Evaluate","color": "#ae5855","capabilities": ["retrieval","verification"],"scientific": "Claim audit","general": "Quality review","description": "Challenge claims, assess quality and compare options.","prompt_scientific": "Audit a manuscript claim against the experiment, analysis and cited evidence.","prompt_general": "Check a proposal against agreed criteria and actively seek counterevidence.","output": "A review with traceable issues, counterexamples and unresolved questions.","human_check": "Evidence independent of the draft, consistent criteria and reviewer limitations."},
+    {"id": "communicate","title": "Communicate","color": "#517a4f","capabilities": ["generation","artifacts"],"scientific": "Paper, figure & brief","general": "Stakeholder brief","description": "Make findings usable for a particular audience.","prompt_scientific": "Turn verified findings into a manuscript section, figure explanation or briefing.","prompt_general": "Turn a checked analysis into a clear, audience-appropriate decision brief.","output": "An editable work product with its key evidence and qualifications intact.","human_check": "Fidelity to the evidence, audience fit, attribution and final sign-off."}
+  ],
+  "patterns": [
+    {"id": "completion","title": "Completion","controller": "Human chooses","summary": "A model continues a partially written text or program.","example": "Suggest the next lines of a data-cleaning script.","human_check": "Accept or reject each suggestion; test the resulting script.","sources": ["codex","gpt3"]},
+    {"id": "conversation","title": "Conversation","controller": "Human steers","summary": "The person asks, inspects the answer and decides the next question.","example": "Discuss a paper and probe competing interpretations.","human_check": "Check claims and supply the next direction.","sources": ["chatgpt","instruct"]},
+    {"id": "workflow","title": "Fixed workflow","controller": "Code routes","summary": "Predefined code determines the sequence and branches; some steps call a model.","example": "Extract claims, normalize a table, then run a fixed validation step.","human_check": "Define inputs, acceptance criteria and failure handling.","sources": ["agents"]},
+    {"id": "agent","title": "Agent","controller": "Model routes","summary": "A model chooses the next action within an environment, using feedback from tools.","example": "Investigate a question, follow relevant sources and revise the search.","human_check": "Set scope, permissions, stop conditions and review gates.","sources": ["react","agents","research"]},
+    {"id": "multiagent","title": "Multi-agent","controller": "Agents coordinate","summary": "A coordinating system divides work among agents and integrates their outputs.","example": "Investigate several literature subquestions in parallel and reconcile disagreements.","human_check": "Check handoffs, shared assumptions, integration cost and actual independence.","sources": ["multi","agents"]}
+  ]
+}
+</script>
+<script>
+'use strict';
+const DATA=JSON.parse(document.getElementById('atlas-data').textContent);
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const byId=(arr,id)=>arr.find(x=>x.id===id);
+const state={view:'map',activity:'all',context:'scientific',selected:null,search:'',kind:'all'};
+const INK='#20343e',MUTED='#627277',LINE='#dce4e0';
+const LANES=[['language','Language & input','#5269af'],['evidence','Evidence & context','#197975'],['reasoning','Reasoning','#946332'],['tools','Tools & interfaces','#88599c'],['coordination','Coordination','#ae5855']];
+const text=(x,y,s,size=18,fill=INK,weight=400,extra='')=>`<text x="${x}" y="${y}" font-family="Arial, sans-serif" font-size="${size}" fill="${fill}" font-weight="${weight}" ${extra}>${esc(s)}</text>`;
+const rect=(x,y,w,h,fill='#fff',stroke=LINE,r=12,extra='')=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${stroke}" ${extra}/>`;
+const path=(d,color=LINE,width=2,extra='')=>`<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" ${extra}/>`;
+const circle=(x,y,r,fill,stroke='none',extra='')=>`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${stroke}" ${extra}/>`;
+function wrap(s,max){const words=s.split(/\s+/);const out=[];let line='';for(const word of words){if(line&&line.length+word.length+1>max){out.push(line);line=word;}else line+=(line?' ':'')+word;}if(line)out.push(line);return out;}
+function lines(x,y,s,max,size=16,fill=INK,weight=400,leading=23){return wrap(s,max).map((l,i)=>text(x,y+i*leading,l,size,fill,weight)).join('');}
+function mark(kind,x,y,color,size=5){if(kind==='model')return circle(x,y,size,color);if(kind==='check'||kind==='method')return `<path d="M${x} ${y-size-1}l${size+1} ${size+1}l-${size+1} ${size+1}l-${size+1}-${size+1}Z" fill="${color}"/>`;if(kind==='system')return circle(x,y,size+2,'none',color)+circle(x,y,size-2,color);if(kind==='protocol')return `<path d="M${x-size} ${y-size}h${size*2}l${size/2} ${size}l-${size/2} ${size}h-${size*2}l-${size/2}-${size}Z" fill="${color}"/>`;return rect(x-size,y-size,size*2,size*2,color,'none',2);}
+function selectable(type,id,label,content){return `<g role="button" tabindex="0" aria-label="${esc(label)}" data-select-type="${type}" data-select-id="${esc(id)}">${content}</g>`;}
+function svgOpen(height,title,desc){return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1360" height="${height}" viewBox="0 0 1360 ${height}" role="group" aria-labelledby="svg-title svg-desc"><title id="svg-title">${esc(title)}</title><desc id="svg-desc">${esc(desc)}</desc><rect width="1360" height="${height}" fill="#ffffff"/>`;}
+function routeTag(cap,x,y,color){let rx=cap.kind==='model'?24:8;let v=rect(x,y-24,198,48,'#fff',color,rx,`class="hit" ${cap.kind==='check'?'stroke-dasharray="4 3"':''}`);v+=mark(cap.kind,x+17,y,color,4);v+=text(x+31,y+5,cap.title,15,color,600);return selectable('capability',cap.id,`${cap.title}: ${cap.kind} capability`,v);}
+function mapSvg(){
+ let s=svgOpen(765,'LLMs for knowledge work','A generative language model connects to six overlapping knowledge activities. Each branch shows one illustrative pair of capabilities; these are not prerequisites. Model capabilities, system additions and independent verification are distinguished. Human direction spans all activities.');
+ s+=text(42,65,'LLMs for knowledge work',35,INK,650);
+ s+=mark('model',49,108,'#5b6c73',5)+text(63,113,'Model capability',14,MUTED);
+ s+=mark('system',235,108,'#5b6c73',5)+text(249,113,'System addition',14,MUTED);
+ s+=mark('check',420,108,'#5b6c73',5)+text(434,113,'Verification',14,MUTED);
+ s+=text(1316,111,state.context==='scientific'?'Scientific research':'General knowledge work',14,MUTED,400,'text-anchor="end"');
+ DATA.activities.forEach((a,i)=>{
+  const y=187+i*78,c=a.color,dim=state.activity!=='all'&&state.activity!==a.id;
+  s+=`<g opacity="${dim?.24:1}">`;
+  s+=path(`M288 382 C395 382 389 ${y} 484 ${y} H1022`,c,dim?1.5:2.1);
+  s+=circle(485,y,4,c)+path(`M1016 ${y-4}l6 4l-6 4`,c,1.8);
+  s+=routeTag(byId(DATA.capabilities,a.capabilities[0]),499,y,c);
+  s+=circle(717,y,11,'#fff')+text(717,y+5,'+',18,MUTED,400,'text-anchor="middle"');
+  s+=routeTag(byId(DATA.capabilities,a.capabilities[1]),739,y,c);
+  let v=rect(1037,y-31,282,64,state.activity===a.id?c+'0e':'#fafcfb',state.activity===a.id?c:'#edf0ed',10,'class="hit"');
+  v+=rect(1037,y-18,3,37,c,'none',1);
+  v+=text(1056,y-3,a.title,21,c,650)+text(1056,y+19,a[state.context],14,MUTED);
+  s+=selectable('activity',a.id,`${a.title}. Example: ${a[state.context]}`,v)+'</g>';
+ });
+ let root=rect(42,288,246,188,INK,INK,18,'class="hit"');
+ root+=path('M67 331h20q10 0 10-10v-9M87 331q10 0 10 10v9M97 331h20','#8fbcb0',2);
+ root+=circle(98,311,4,'#8fbcb0')+circle(118,331,4,'#8fbcb0')+circle(98,352,4,'#8fbcb0');
+ root+=text(64,387,'Language model',24,'#fff',600)+text(64,418,'Generate and transform',15,'#cadad6')+text(64,442,'information in context',15,'#cadad6');
+ s+=selectable('overview','model','About language models and systems',root);
+ s+=rect(42,639,1277,61,'#f2f5f1','none',12)+text(65,676,'Human direction',18,INK,650)+text(292,676,'Frame the question   ·   judge the evidence   ·   approve the result',19,INK,400);
+ s+=text(42,737,'Illustrative combinations—not prerequisites, a sequence, or model ancestry.',15,MUTED);
+ s+=text(1319,737,'LLM ATLAS',12,MUTED,600,'text-anchor="end" letter-spacing="1.8"');
+ return s+'</svg>';
+}
+function filteredMilestones(){return DATA.milestones.filter(m=>(state.kind==='all'||m.kind===state.kind)&&(state.activity==='all'||m.activities.includes(state.activity))&&`${m.title} ${m.change} ${m.date} ${m.kind}`.toLowerCase().includes(state.search.toLowerCase().trim()));}
+function historySvg(){
+ const ms=filteredMilestones();const eras=[['2025',2025,2025],['2024',2024,2024],['2023',2023,2023],['2022',2022,2022],['2020–21',2020,2021],['2017–18',2017,2018]];
+ let y=219;const bands=[];
+ for(const [label,lo,hi] of eras){const entries=ms.filter(m=>+m.date.slice(0,4)>=lo&&+m.date.slice(0,4)<=hi);if(!entries.length)continue;const count=Math.max(...LANES.map(l=>entries.filter(m=>m.lane===l[0]).length));const h=count*76+34;bands.push({label,entries,y,h});y+=h;}
+ const h=Math.max(500,y+85);let s=svgOpen(h,'From models to working systems','Selected historical milestones, newest at the top. Columns group contributions, not ancestry. Row spacing is categorical and not proportional to elapsed time. Select a milestone for the source and exact date type.');
+ s+=text(42,65,'From models to working systems',35,INK,650);
+ ['model','method','product','protocol','system'].forEach((k,i)=>{s+=mark(k,50+i*160,112,MUTED,5)+text(64+i*160,117,k[0].toUpperCase()+k.slice(1),14,MUTED);});
+ s+=text(1316,116,`${ms.length} / ${DATA.milestones.length} selected anchors`,14,MUTED,400,'text-anchor="end"');
+ LANES.forEach(([id,label,c],i)=>{s+=text(185+i*226,184,label,16,c,600);});
+ for(const b of bands){s+=path(`M42 ${b.y}H1318`,LINE,1)+text(42,b.y+46,b.label,b.label.length>4?23:30,INK,550);LANES.forEach(([id,label,c],i)=>{const col=b.entries.filter(m=>m.lane===id).sort((a,b)=>b.date.localeCompare(a.date));col.forEach((m,j)=>{const x=176+i*226,ny=b.y+16+j*76;let v=rect(x,ny,212,62,c+'08',state.selected?.id===m.id?c:'#e1e6e2',8,'class="hit"');v+=mark(m.kind,x+16,ny+18,c,4)+text(x+30,ny+22,m.date,11,MUTED);v+=text(x+14,ny+46,m.title,14,c,600);s+=selectable('milestone',m.id,`${m.title}, ${m.date}, ${m.date_type}`,v);});});}
+ if(!ms.length){s+=text(680,303,'No matching milestones',25,INK,500,'text-anchor="middle"')+text(680,340,'Clear the search or change the filters.',17,MUTED,400,'text-anchor="middle"');}
+ s+=text(42,h-43,'2017–2025 selection · newest at top · dates are source-specific · spacing is not elapsed time',14,MUTED);
+ s+=text(1317,h-43,'LLM ATLAS',12,MUTED,600,'text-anchor="end" letter-spacing="1.8"');return s+'</svg>';
+}
+function flowBox(x,y,w,label,fill='#edf3ef',stroke='none',font=15){return rect(x,y,w,40,fill,stroke,7)+text(x+w/2,y+25,label,font,INK,500,'text-anchor="middle"');}
+function patternsSvg(){
+ let s=svgOpen(765,'Different ways to work with LLMs','Five working patterns: completion, conversation, fixed workflow, agent and multi-agent. These are alternatives that can coexist, not a universal maturity ladder. The key distinction is who or what chooses the next step.');
+ s+=text(42,65,'Different ways to work with LLMs',35,INK,650);
+ DATA.patterns.forEach((p,i)=>{const x=42+i*258,w=244,c=['#5269af','#197975','#946332','#88599c','#ae5855'][i];let v=rect(x,153,w,465,'#fafcfb',state.selected?.id===p.id?c:LINE,14,'class="hit"');v+=rect(x+17,174,29,4,c,'none',2)+text(x+17,211,p.title,23,c,600)+text(x+17,241,p.controller,14,MUTED,500);
+ const bx=x+24,bw=196;
+ if(i<2){v+=flowBox(bx,279,bw,i===0?'Partial text / code':'Question');v+=path(`M${x+122} 321v25`,c,1.8)+path(`M${x+118} 340l4 6l4-6`,c,1.8);v+=flowBox(bx,349,bw,'Model response',c+'12');v+=path(`M${x+122} 391v25`,c,1.8)+path(`M${x+118} 410l4 6l4-6`,c,1.8);v+=flowBox(bx,419,bw,i===0?'Accept / reject':'Human directs');if(i===1)v+=path(`M${bx+bw} 439h9V299h-9`,c,1.5,'stroke-dasharray="4 4"');}
+ if(i===2){v+=flowBox(bx,279,bw,'Defined input');v+=flowBox(bx,349,bw,'Fixed steps + LLM');v+=flowBox(bx,419,bw,'Validation gate');v+=path(`M${x+122} 321v25M${x+122} 391v25`,c,1.8)+path(`M${x+118} 340l4 6l4-6M${x+118} 410l4 6l4-6`,c,1.8);}
+ if(i===3){v+=flowBox(bx,279,bw,'Goal + boundaries');v+=flowBox(bx+15,351,bw-30,'Choose next action',c+'12','none',14);v+=flowBox(bx+15,426,bw-30,'Tool + observation','#edf3ef','none',14);v+=path(`M${x+122} 321v26M${x+122} 393v29`,c,1.8)+path(`M${x+118} 416l4 6l4-6`,c,1.8);v+=path(`M${bx+15} 447h-15v-75h15`,c,1.8)+path(`M${bx+10} 368l5 4l-5 4`,c,1.8);}
+ if(i===4){v+=flowBox(bx,279,bw,'Goal + coordinator');[0,1,2].forEach(j=>{const px=x+46+j*76;v+=path(`M${x+122} 321Q${x+122} 344 ${px} 364`,c,1.5)+circle(px,389,23,c+'12',c)+text(px,394,'Agent',11,c,500,'text-anchor="middle"')+path(`M${px} 412Q${px} 441 ${x+122} 453`,c,1.5);});v+=flowBox(bx,455,bw,'Integrate + review');}
+ v+=lines(x+18,i===4?539:518,i===0?'The person completes the work.':i===1?'The person directs each turn.':i===2?'The process is defined in code.':i===3?'Tool feedback changes the next action.':'Parallel work still needs integration.',25,16,INK,400,24);
+ s+=selectable('pattern',p.id,`${p.title}: ${p.controller}`,v);});
+ s+=rect(42,649,1276,50,'#f2f5f1','none',10)+text(65,680,'Choose the simplest pattern that fits the task, its uncertainty, and the cost of failure.',18,INK,500);
+ s+=text(42,737,'Patterns can coexist. More autonomy or more agents does not guarantee better work.',15,MUTED)+text(1317,737,'LLM ATLAS',12,MUTED,600,'text-anchor="end" letter-spacing="1.8"');return s+'</svg>';
+}
+function sourceLinks(ids){return [...new Set(ids)].map(id=>{const s=byId(DATA.sources,id);return s?`<a class="source-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)} ↗<span>${esc(s.author)} · ${esc(s.date)}</span></a>`:'';}).join('');}
+function inspector(){
+ const sel=state.selected;let h='';
+ if(!sel||sel.type==='overview'){
+ h=`<span class="eyebrow">${state.view==='history'?'A selective history':state.view==='patterns'?'Control, not a leaderboard':'Start with the work'}</span><h2>${state.view==='history'?'Milestones, not ancestors.':state.view==='patterns'?'Agency belongs to the system.':'A model is only part of the system.'}</h2>`;
+ h+=state.view==='history'?'<p class="intro">Models, methods, products, protocols and systems are different kinds of contribution. Select a milestone to inspect its exact date, significance and primary source.</p><h3>What the chart does not claim</h3><div class="guard">No undocumented inheritance links. No claim that a milestone was the first invention of its idea. This selection ends in September 2025; it is not a current model catalogue.</div>':state.view==='patterns'?'<p class="intro">A capable model can be used in any of these patterns. What changes is who routes the work and how feedback informs the next step.</p><h3>Your responsibility</h3><div class="guard">Set the objective, scope and permissions. Define how to test the result and when the system should stop or ask for review.</div>':'<p class="intro">Models contribute learned capabilities. Retrieval, execution environments and applications connect those capabilities to useful work.</p><h3>Explore a branch</h3><p>Choose an activity for a research example, a work product and the checks that remain yours. Select a capability for the technical explanation.</p><h3>Overlapping activities</h3><div class="guard">Finding, understanding, analyzing, creating, evaluating and communicating are not a fixed sequence. A single project can move between all of them.</div>';
+ h+='<h3>Technical anchors</h3>'+sourceLinks(state.view==='history'?['transformer','rag']:state.view==='patterns'?['agents','react']:['rag','agents']);
+ }else{
+ h='<button class="back" data-clear>← Overview</button>';
+ if(sel.type==='activity'){const a=byId(DATA.activities,sel.id);h+=`<h2 style="color:${a.color}">${esc(a.title)}</h2><p class="intro">${esc(a.description)}</p><h3>Example question</h3><div class="quote"><p>${esc(a['prompt_'+state.context])}</p></div><h3>Work product</h3><p>${esc(a.output)}</p><h3>Your check</h3><div class="guard">${esc(a.human_check)}</div><h3>Illustrative ingredients</h3><div class="mini-tags">${a.capabilities.map(id=>`<button data-cap="${id}">${esc(byId(DATA.capabilities,id).title)}</button>`).join('')}</div><p style="font-size:11px;color:var(--muted)">These combinations are examples, not requirements or benchmarked task recommendations.</p>`;}
+ if(sel.type==='capability'){const c=byId(DATA.capabilities,sel.id);h+=`<h2>${esc(c.title)}</h2><span class="fact-kind">${c.kind==='model'?'Model capability':c.kind==='check'?'Verification principle':'System addition'}</span><p class="intro">${esc(c.description)}</p><h3>Important distinction</h3><div class="guard">${esc(c.limit)}</div><h3>Technical anchors</h3>${sourceLinks(c.sources)}`;}
+ if(sel.type==='milestone'){const m=byId(DATA.milestones,sel.id);h+=`<h2>${esc(m.title)}</h2><span class="fact-kind">${esc(m.kind)}</span><p><strong>${esc(m.date)}</strong><br>${esc(m.date_type)}</p><h3>What changed</h3><p>${esc(m.change)}</p><h3>What this does not establish</h3><div class="guard">${esc(m.limit)}</div><h3>Primary source</h3>${sourceLinks(m.sources)}<h3>Related knowledge activities</h3><div class="mini-tags">${m.activities.map(id=>`<button data-activity="${id}">${esc(byId(DATA.activities,id).title)}</button>`).join('')}</div>`;}
+ if(sel.type==='pattern'){const p=byId(DATA.patterns,sel.id);h+=`<h2>${esc(p.title)}</h2><span class="fact-kind">${esc(p.controller)}</span><p class="intro">${esc(p.summary)}</p><h3>Illustrative use</h3><div class="quote"><p>${esc(p.example)}</p></div><h3>Your check</h3><div class="guard">${esc(p.human_check)}</div><h3>Technical anchors</h3>${sourceLinks(p.sources)}`;}
+ }
+ $('inspector').innerHTML=h;
+}
+function select(type,id){state.selected={type,id};if(type==='activity'){state.activity=id;state.view='map';}render();const item=byId(DATA.activities,id)||byId(DATA.capabilities,id)||byId(DATA.milestones,id)||byId(DATA.patterns,id);announce(`${item?.title||'Overview'} selected. Details are in the information panel.`);}
+function announce(s){$('status').textContent=s;}
+function setHash(){const p=new URLSearchParams({view:state.view,activity:state.activity,context:state.context});if(state.selected)p.set('selected',state.selected.type+':'+state.selected.id);if(state.search)p.set('search',state.search);if(state.kind!=='all')p.set('kind',state.kind);try{history.replaceState(null,'','#'+p.toString());}catch(e){/* Some embedded/file viewers prohibit history updates. */}}
+function loadHash(hash=location.hash){const p=new URLSearchParams(hash.slice(1));if(['map','history','patterns'].includes(p.get('view')))state.view=p.get('view');if(p.get('activity')==='all'||byId(DATA.activities,p.get('activity')))state.activity=p.get('activity');if(['scientific','general'].includes(p.get('context')))state.context=p.get('context');if(['all','model','method','product','protocol','system'].includes(p.get('kind')))state.kind=p.get('kind');state.search=p.get('search')||'';const [type,id]=(p.get('selected')||'').split(':');const pools={activity:DATA.activities,capability:DATA.capabilities,milestone:DATA.milestones,pattern:DATA.patterns};if(pools[type]&&byId(pools[type],id))state.selected={type,id};}
+function render(){
+ const focused=document.activeElement?.dataset?.selectId,focusedType=document.activeElement?.dataset?.selectType;
+ document.querySelectorAll('[data-view]').forEach(b=>{const on=b.dataset.view===state.view;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;});
+ $('main').setAttribute('aria-labelledby','tab-'+state.view);
+ $('timeline-tools').classList.toggle('hidden',state.view!=='history');$('context-control').classList.toggle('hidden',state.view!=='map');$('activity-filters').classList.toggle('hidden',state.view==='patterns');
+ document.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===state.activity)));
+ $('context').value=state.context;$('search').value=state.search;$('kind').value=state.kind;
+ $('figure').innerHTML=state.view==='map'?mapSvg():state.view==='history'?historySvg():patternsSvg();
+ $('figure-note').textContent=state.view==='map'?'Select an activity or capability. The two example sets use the same capability map.':state.view==='history'?`Selected milestones: 2017–2025. Sources reviewed ${DATA.reviewed}. Search and filters apply to this selection only.`:'Select a pattern to see its control structure, example use and review responsibilities.';
+ inspector();setHash();
+ if(focused){const el=[...$('figure').querySelectorAll('[data-select-id]')].find(e=>e.dataset.selectId===focused&&e.dataset.selectType===focusedType);el?.focus({preventScroll:true});}
+}
+function reset(){state.activity='all';state.selected=null;state.search='';state.kind='all';render();announce('Filters and selection reset.');}
+$('activity-filters').innerHTML='<button data-filter="all" aria-pressed="true">All work</button>'+DATA.activities.map(a=>`<button data-filter="${a.id}" aria-pressed="false"><span class="dot" style="background:${a.color}"></span>${a.title}</button>`).join('');
+$('activity-filters').addEventListener('click',e=>{const b=e.target.closest('[data-filter]');if(!b)return;state.activity=b.dataset.filter;state.selected=state.view==='map'&&state.activity!=='all'?{type:'activity',id:state.activity}:null;render();announce(state.activity==='all'?'All activities shown.':`${byId(DATA.activities,state.activity).title} filter selected.`);});
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{state.view=b.dataset.view;state.selected=null;render();announce(`${b.textContent} view.`);}));
+document.querySelector('.tabs').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const tabs=[...document.querySelectorAll('[data-view]')];let n=tabs.findIndex(b=>b.dataset.view===state.view);n=e.key==='Home'?0:e.key==='End'?tabs.length-1:(n+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[n].click();tabs[n].focus();});
+$('figure').addEventListener('click',e=>{const g=e.target.closest('[data-select-type]');if(g)select(g.dataset.selectType,g.dataset.selectId);});
+$('figure').addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const g=e.target.closest('[data-select-type]');if(g){e.preventDefault();select(g.dataset.selectType,g.dataset.selectId);}});
+$('inspector').addEventListener('click',e=>{if(e.target.closest('[data-clear]')){state.selected=null;state.activity='all';render();}const c=e.target.closest('[data-cap]');if(c)select('capability',c.dataset.cap);const a=e.target.closest('[data-activity]');if(a)select('activity',a.dataset.activity);});
+$('context').addEventListener('change',e=>{state.context=e.target.value;render();});
+$('search').addEventListener('input',e=>{state.search=e.target.value;state.selected=null;render();announce(`${filteredMilestones().length} milestones match.`);});
+$('kind').addEventListener('change',e=>{state.kind=e.target.value;state.selected=null;render();announce(`${filteredMilestones().length} milestones match.`);});
+$('reset').addEventListener('click',reset);
+function togglePresent(){const on=document.body.classList.toggle('present');$('present').setAttribute('aria-pressed',String(on));$('present').textContent=on?'Exit ⛶':'Present ⛶';announce(on?'Presentation view. Press Escape or F to exit.':'Presentation view closed.');}
+$('present').addEventListener('click',togglePresent);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('present'))togglePresent();if(e.key.toLowerCase()==='f'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)&&!$('sources-dialog').open){e.preventDefault();togglePresent();}});
+$('scope-text').textContent=DATA.scope+` The selected chronology ends on ${DATA.coverage_end}; source links and dates were checked on ${DATA.reviewed}. No undocumented legacy influence edges were imported.`;
+$('source-list').innerHTML=DATA.sources.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)} ↗</a><span>${esc(s.author)} · ${esc(s.date)}</span></li>`).join('');
+$('sources-open').addEventListener('click',()=>$('sources-dialog').showModal());$('sources-close').addEventListener('click',()=>$('sources-dialog').close());
+function exportSvgText(){const el=$('figure').querySelector('svg').cloneNode(true);const meta=document.createElementNS('http://www.w3.org/2000/svg','metadata');meta.textContent=JSON.stringify({scope:DATA.scope,reviewed:DATA.reviewed,coverage_end:DATA.coverage_end,view:state.view,activity:state.activity,context:state.context,search:state.search,kind:state.kind,sources:DATA.sources});el.insertBefore(meta,el.firstChild);el.querySelectorAll('[tabindex]').forEach(g=>{g.removeAttribute('tabindex');g.removeAttribute('role');});return new XMLSerializer().serializeToString(el);}
+function download(blob,name){const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000);}
+$('export-svg').addEventListener('click',()=>{download(new Blob([exportSvgText()],{type:'image/svg+xml;charset=utf-8'}),`llm-atlas-${state.view}.svg`);announce('SVG exported with source metadata.');});
+$('export-png').addEventListener('click',async()=>{const button=$('export-png');button.disabled=true;let url;try{const svg=$('figure').querySelector('svg'),w=+svg.getAttribute('width'),h=+svg.getAttribute('height');url=URL.createObjectURL(new Blob([exportSvgText()],{type:'image/svg+xml;charset=utf-8'}));const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('SVG image could not be rendered.'));img.src=url;});const canvas=document.createElement('canvas');canvas.width=w*2;canvas.height=h*2;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Canvas is unavailable in this viewer.');ctx.drawImage(img,0,0,canvas.width,canvas.height);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('PNG encoding failed.');download(blob,`llm-atlas-${state.view}.png`);announce(`PNG exported at ${canvas.width} × ${canvas.height} pixels.`);}catch(err){announce('Export failed: '+err.message+' Use SVG instead.');}finally{if(url)URL.revokeObjectURL(url);button.disabled=false;}});
+window.addEventListener('hashchange',()=>{state.selected=null;loadHash();render();});
+loadHash();render();
+</script>
 </body>
 </html>
