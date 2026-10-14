@@ -1,137 +1,67 @@
-Please note: This is produced using LLM prompting only (via the chat interface of OpenAI's Codex), so take care not to trust the figures at face value. 
+# LLM Atlas — LLMs for knowledge work
 
-# LLM Phylogeny
+An interactive guide to what language models contribute to knowledge work, what the surrounding system adds, and how people remain in control.
 
-LLM Phylogeny maps how milestone large language models build on one another's
-architectural innovations. The interactive network links each release to the
-ideas it inherits so you can trace the technical lineage that shaped today's
-transformer ecosystem. Models appear at the intersection of their
-breakthrough innovation (x-axis) and release timing (y-axis), while colours
-group models by brand for quick visual scanning.
+The new default viewer is **[`docs/index.html`](docs/index.html)**. Download that one file and open it in a modern browser, or serve the repository locally:
 
-![Static snapshot of the LLM phylogeny network](docs/interactive_llm_phylogeny.svg)
+```bash
+python -m http.server --directory docs 8000
+```
 
-## Explore the interactive network
+Then open `http://localhost:8000`. The atlas itself has no runtime network dependencies, external fonts, JavaScript packages, API keys or build step. Following source and repository links requires internet access.
 
-GitHub strips the JavaScript that powers a Bokeh figure from Markdown pages, so
-the chart cannot be embedded directly in this README. Instead, use one of the
-following options to open the same interactive HTML artifact that lives in
-[`docs/interactive_llm_phylogeny.html`](docs/interactive_llm_phylogeny.html):
+![LLMs for knowledge work](docs/knowledge-work-atlas.svg)
 
-1. **Open the viewer through HTMLPreview** (quickest way from GitHub):
-   1. Click the **Open interactive viewer** badge below to open the HTML file.
-   2. In the toolbar of the new page, choose **View raw**.
-   3. Copy the browser URL and paste it into [htmlpreview.github.io](https://htmlpreview.github.io/).
-   4. The hosted preview will load the interactive Bokeh app in your browser.
-      You can also build the link yourself by replacing `<your-user>` in
-      [`https://htmlpreview.github.io/?https://raw.githubusercontent.com/<your-user>/LLM_phylogeny/main/docs/interactive_llm_phylogeny.html`](https://htmlpreview.github.io/?https://raw.githubusercontent.com/<your-user>/LLM_phylogeny/main/docs/interactive_llm_phylogeny.html).
+## Three views
 
-   [![Open interactive viewer](https://img.shields.io/badge/Interactive%20network-Open%20HTML-blue)](docs/interactive_llm_phylogeny.html)
-
-2. **Launch it locally** if you have the repository cloned:
-   ```bash
-   python -m http.server --directory docs
-   ```
-   Then visit [http://localhost:8000/interactive_llm_phylogeny.html](http://localhost:8000/interactive_llm_phylogeny.html) in your browser.
-
-3. **Regenerate the HTML** (optional) after editing any dataset:
-   ```bash
-   python app/llm_phylogeny.py \
-       --data data/llm_models.csv \
-       --output docs/interactive_llm_phylogeny.html \
-       --svg-output docs/interactive_llm_phylogeny.svg
-   ```
-   Use the `--data` flag to point at any CSV under `data/` and `--title` if you
-   want the figure header to reflect the dataset you are plotting. Pass
-   `--no-svg` to skip regenerating the static figure when only the interactive
-   output is needed.
-
-## Dataset
-
-All model metadata is stored in the CSV files under [`data/`](data) so any of
-the graphs can be regenerated or extended with new models. Every dataset shares
-the same schema, which keeps the tooling interchangeable. Each row contains:
-
-| column | description |
+| View | Purpose |
 | --- | --- |
-| `name` | Model name shown in the network. |
-| `brand` | Organisation or company responsible for the release. |
-| `family` | High-level model family used for additional grouping. |
-| `release_date` | Public release date in ISO `YYYY-MM-DD` format. |
-| `influences` | Semicolon-separated list of upstream models. |
-| `innovation_category` | Technical innovation category plotted along the x-axis. |
-| `innovation_summary` | Short description of what made the release notable. |
+| **Capability map** | Connect a language model to finding, understanding, analyzing, creating, evaluating and communicating. Distinguish model capabilities, system additions and verification. |
+| **Milestones** | Explore 16 source-linked historical anchors, newest first, grouped by contribution rather than undocumented ancestry. Filter by activity or contribution type and search the selection. |
+| **Working patterns** | Compare completion, conversation, fixed workflows, agents and multi-agent systems by who chooses the next step—not by an assumed maturity ranking. |
 
-Keep the CSV sorted chronologically by `release_date` so that the generated
-timeline flows naturally from oldest (bottom) to newest (top). The repository
-currently ships with four curated datasets:
+The capability map offers scientific-research and general knowledge-work examples. Selecting a branch explains the question, potential work product and checks that remain the person's responsibility. Capabilities and historical milestones open source-linked detail panels.
 
-- [`data/llm_models.csv`](data/llm_models.csv) – general-purpose transformer
-  language models spanning OpenAI, Anthropic, Google, Meta, and more.
-- [`data/protein_models.csv`](data/protein_models.csv) – protein language
-  models that capture evolutionary signals for design and structure prediction.
-- [`data/genome_models.csv`](data/genome_models.csv) – nucleotide-focused
-  models aimed at genomics, variant prioritisation, and long-range regulation.
-- [`data/small_molecule_models.csv`](data/small_molecule_models.csv) – chemical
-  foundation models for molecular property prediction and synthesis planning.
+Use **Present** (or `F`; `Escape` to exit) for a decluttered view. **SVG** exports an editable vector diagram with source metadata; **PNG** exports the current diagram at twice its native resolution. The map and working-pattern views use a 16:9 canvas. The interface supports keyboard navigation, shareable URL-fragment state and contained horizontal scrolling on small screens.
 
-Every CSV can be plugged directly into `app/llm_phylogeny.py`, making it easy
-to compare innovation trajectories across biological and general language
-models without changing the code.
+## Scope and evidence
 
-## Biological language model phylogenies
+This is a conceptual atlas, not a literal phylogeny, model leaderboard or current product catalogue. The selected chronology covers **2017–September 2025**. Primary-source links and dates were reviewed on **14 October 2026**; that review date does not extend the chronology.
 
-In addition to the transformer family tree for mainstream LLMs, the project now
-charts three specialised domains of biological language models. Each static
-snapshot below links to an interactive HTML file in `docs/` that you can open
-following the same instructions as the primary chart.
+Each milestone identifies whether its date refers to a paper submission, announcement or engineering publication. Models, methods, products, protocols and systems are separate contribution types. No unverified influence edges from the original datasets were imported.
 
-### Proteins
+The six activities overlap. Their capability pairings and example questions are **editorial illustrations, not prerequisites or measured task-performance claims**. A retrieved citation, more inference computation, or a second agent is not automatically independent verification. Read the limitations in each detail panel and the **Sources & scope** dialog.
 
-![Static snapshot of the protein LM phylogeny](docs/protein_llm_phylogeny.svg)
+## Maintain and test
 
-Protein language models progress from the recurrent UniRep encoder through
-benchmark-driven transformers such as TAPE, towards large-scale masked models
-including ProtBERT and ESM-2. Recent work fuses sequence modelling with
-structure-aware generation, culminating in tools like ESMFold and EvoDiff, and
-now extends to frontier foundation models such as EvolutionaryScale's Evo 1 and
-Meta's multimodal ESM3 for generative protein design.
+The single source of truth is the JSON block with `id="atlas-data"` in `docs/index.html`. Data, presentation styles and rendering code are embedded so the downloadable viewer works on its own. The current map layout expects six activities, two example ingredients per activity and five working patterns; update the layout and tests together when changing those counts.
 
-### Genomes
+The validator and data tests use only the Python standard library:
 
-![Static snapshot of the genome LM phylogeny](docs/genome_llm_phylogeny.svg)
+```bash
+python app/validate_atlas.py
+python -m unittest discover -s tests -p 'test_atlas_data.py' -v
+```
 
-Genome-focused language models extend tokenisation and attention mechanisms to
-cope with extremely long DNA contexts. Innovations such as DNABERT's k-mer
-tokenisation, Enformer's dilated attention, and HyenaDNA's implicit convolutions
-enable regulatory inference and surveillance models like GenSLMs and EvoGene.
+Real-browser tests are optional development dependencies:
 
-### Small molecules
+```bash
+python -m pip install playwright
+python -m playwright install chromium
+python -m unittest discover -s tests -p 'test_atlas_browser.py' -v
+```
 
-![Static snapshot of the small-molecule LM phylogeny](docs/small_molecule_llm_phylogeny.svg)
+Alternatively set `CHROMIUM_EXECUTABLE` to an installed Chromium executable. Browser tests render the actual HTML from memory with runtime network requests blocked. They cover interaction, filtering, sources, keyboard controls, small-screen layout, text bounds and SVG/PNG downloads. They test the URL-state parser, not a deployed hosting environment. If Playwright is absent, the browser suite reports skips rather than pretending to have run.
 
-Chemical language models start from SMILES Transformers for contextual
-representations and evolve through masked and denoising architectures like
-ChemBERTa and MegaMolBART. Subsequent models emphasise controllable generation
-and synthesis feedback, with ChemGPT, DrugGPT, and SynMoGEN integrating
-interactive design and retrosynthetic constraints.
+Implementation verification: **15 data tests and 16 Chromium browser tests passed**. This is not an exhaustive accessibility audit or a cross-browser certification.
 
-## Development workflow
+## Original phylogenies
 
-1. Update `data/llm_models.csv` with any new models.
-2. Run `python app/llm_phylogeny.py` to rebuild the HTML output.
-3. Commit both the CSV changes and the regenerated
-   `docs/interactive_llm_phylogeny.html` so the hosted preview stays current.
+The original Bokeh generator, CSV datasets and generated figures remain unchanged. The previous landing page and README are retained as [`docs/legacy-index.html`](docs/legacy-index.html) and [`docs/legacy-readme.md`](docs/legacy-readme.md).
 
-## Project goals
+- [General LLMs](docs/interactive_llm_phylogeny.html)
+- [Proteins](docs/protein_llm_phylogeny.html)
+- [Genomes](docs/genome_llm_phylogeny.html)
+- [Small molecules](docs/small_molecule_llm_phylogeny.html)
 
-The visualisation is designed to make the evolution of large language models
-clear at a glance:
-
-- Highlight when novel architectural ideas (Mixture-of-Experts, RLHF, long-context
-  attention, etc.) enter the ecosystem.
-- Show how families build on previous work through explicit influence edges.
-- Convey the rapid cadence of releases over time through the vertical timeline.
-
-Contributions are welcome—feel free to open issues or PRs that add new models,
-refine the taxonomy, or improve the interactivity of the plot.
+These legacy figures and datasets retain their original limitations and have **not** been validated by the new atlas tests. See the archived README for their generator commands; its relative links originally resolved from the repository root.
